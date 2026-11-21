@@ -6,8 +6,8 @@ import {
   Navigate,
   useLocation,
 } from 'react-router-dom';
-import { getCurrentUser, onAuthChange, type CurrentUser } from './features/auth/authMock';
-import { updateLastSeen } from '@/lib/apiClient';
+import { getCurrentUser, onAuthChange, updateLastSeen } from '@/lib/apiClient';
+import type { CurrentUser } from '@/types/api';
 
 // Pages
 import LandingPage from './features/landing/LandingPage';

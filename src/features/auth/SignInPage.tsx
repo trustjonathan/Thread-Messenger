@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { signInWithGoogle } from './authMock';
+import { signInWithGoogle } from '@/lib/apiClient';
 import { getHumanErrorMessage } from '../chat/components/ErrorMessage';
 import { MessageSquare, RefreshCw } from 'lucide-react';
 

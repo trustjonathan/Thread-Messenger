@@ -1,6 +1,8 @@
 import type {
   ApiResult,
+  BlockedUser,
   ConversationSummary,
+  CurrentUser,
   Message,
   MessageCursor,
   PaginatedMessages,
@@ -121,6 +123,18 @@ export async function setUsername(
   const current = mockStore.users.find((u) => u.id === mockStore.currentUserId);
   if (current) {
     current.username = clean;
+  }
+  if (mockCurrentUserState) {
+    mockCurrentUserState.username = clean;
+    mockCurrentUserState.usernameSet = true;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(mockCurrentUserState));
+      } catch {
+        // ignore
+      }
+    }
+    notifyMockAuth();
   }
   return { data: undefined, error: null };
 }
@@ -324,6 +338,118 @@ export function subscribeToUserMessages(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Mock Authentication & User Management (REQ-AUTH-01)
+// ---------------------------------------------------------------------------
+
+const STORAGE_KEY = 'thread_current_user';
+
+function getInitialUser(): CurrentUser | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+let mockCurrentUserState: CurrentUser | null = getInitialUser();
+
+const mockBlockedList: BlockedUser[] = [
+  { id: '33333333-3333-3333-3333-333333333333', username: 'bob', displayName: 'Bob Jones' },
+];
+
+const mockAuthListeners = new Set<(user: CurrentUser | null) => void>();
+
+function notifyMockAuth() {
+  for (const listener of mockAuthListeners) {
+    try {
+      listener(mockCurrentUserState);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export async function signInWithGoogle(): Promise<ApiResult<void>> {
+  await simulateLatency();
+  mockCurrentUserState = {
+    id: '11111111-1111-1111-1111-111111111111',
+    username: 'current_user',
+    displayName: 'Current User',
+    usernameSet: true,
+  };
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(mockCurrentUserState));
+    } catch {
+      // ignore
+    }
+  }
+  notifyMockAuth();
+  return { data: undefined, error: null };
+}
+
+export async function signOut(): Promise<ApiResult<void>> {
+  await simulateLatency();
+  mockCurrentUserState = null;
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  }
+  notifyMockAuth();
+  return { data: undefined, error: null };
+}
+
+export async function getCurrentUser(): Promise<ApiResult<CurrentUser | null>> {
+  return { data: mockCurrentUserState, error: null };
+}
+
+export function onAuthChange(callback: (user: CurrentUser | null) => void): () => void {
+  mockAuthListeners.add(callback);
+  callback(mockCurrentUserState);
+  return () => {
+    mockAuthListeners.delete(callback);
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mock Settings Functions (REQ-SETTINGS-01, REQ-SETTINGS-02)
+// ---------------------------------------------------------------------------
+
+export async function updateDisplayName(displayName: string): Promise<ApiResult<void>> {
+  await simulateLatency();
+  const trimmed = displayName.trim();
+  if (!trimmed || trimmed.length > 50) {
+    return {
+      data: null,
+      error: { code: 'VALIDATION_ERROR', message: 'Display name must be between 1 and 50 characters.' },
+    };
+  }
+  if (!mockCurrentUserState) {
+    return { data: null, error: { code: 'UNAUTHENTICATED', message: 'User is not signed in.' } };
+  }
+  mockCurrentUserState.displayName = trimmed;
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(mockCurrentUserState));
+    } catch {
+      // ignore
+    }
+  }
+  notifyMockAuth();
+  return { data: undefined, error: null };
+}
+
+export async function listBlockedUsers(): Promise<ApiResult<BlockedUser[]>> {
+  await simulateLatency();
+  return { data: [...mockBlockedList], error: null };
+}
 
 // ---------------------------------------------------------------------------
 // Compile-time surface parity guard.
@@ -344,6 +470,12 @@ const _mockSurface = {
   reportContent,
   updateLastSeen,
   subscribeToUserMessages,
+  signInWithGoogle,
+  signOut,
+  getCurrentUser,
+  onAuthChange,
+  updateDisplayName,
+  listBlockedUsers,
 } satisfies typeof RealApi;
 
 void _mockSurface;

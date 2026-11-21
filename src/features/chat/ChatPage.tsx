@@ -9,9 +9,9 @@ import {
   blockUser,
   reportContent,
   subscribeToUserMessages,
+  getCurrentUser,
 } from '@/lib/apiClient';
 import type { MessageCursor, ConversationSummary, Message } from '@/types/api';
-import { getCurrentUser } from '../auth/authMock';
 import { Avatar } from './components/Avatar';
 import { DateSeparator } from './components/DateSeparator';
 import { ReportModal } from './components/ReportModal';

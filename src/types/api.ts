@@ -26,6 +26,15 @@ export interface UserProfilePreview {
   displayName: string;
 }
 
+export interface CurrentUser {
+  id: string;
+  username: string;
+  displayName: string;
+  usernameSet: boolean;
+}
+
+export type BlockedUser = UserProfilePreview;
+
 export interface ConversationSummary {
   conversationId: string;
   createdAt: string;

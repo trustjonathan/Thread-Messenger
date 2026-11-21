@@ -1,14 +1,14 @@
 // TODO: listBlockedUsers and updateDisplayName need contract RPCs — see NEEDS_API.md
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { unblockUser } from '@/lib/apiClient';
 import {
+  unblockUser,
   getCurrentUser,
   signOut,
   updateDisplayName,
   listBlockedUsers,
-} from '../auth/authMock';
-import type { BlockedUser } from '../auth/authMock';
+} from '@/lib/apiClient';
+import type { BlockedUser } from '@/types/api';
 import {
   Copy,
   Check,

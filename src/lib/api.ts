@@ -4,7 +4,9 @@ import type { Database } from '../types/database';
 import type {
   ApiError,
   ApiResult,
+  BlockedUser,
   ConversationSummary,
+  CurrentUser,
   Message,
   MessageCursor,
   PaginatedMessages,
@@ -154,6 +156,7 @@ export async function setUsername(
       return { data: null, error: mapError(error) };
     }
 
+    emitAuthChange(client);
     return { data: undefined, error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };
@@ -525,4 +528,264 @@ export function subscribeToUserMessages(
     channel.unsubscribe();
     client.removeChannel(channel);
   };
+}
+
+// ---------------------------------------------------------------------------
+// Authentication & User Management (REQ-AUTH-01)
+// ---------------------------------------------------------------------------
+
+const authListeners = new Set<(user: CurrentUser | null) => void>();
+
+async function emitAuthChange(client: SupabaseClient<Database> = defaultClient): Promise<void> {
+  const res = await getCurrentUser(client);
+  for (const listener of authListeners) {
+    try {
+      listener(res.data);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/**
+ * Initiates Google OAuth sign-in flow.
+ */
+export async function signInWithGoogle(
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<void>> {
+  try {
+    const redirectTo =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/chats`
+        : undefined;
+
+    const { error } = await client.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+      },
+    });
+
+    if (error) {
+      return { data: null, error: mapError(error) };
+    }
+
+    return { data: undefined, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+/**
+ * Signs out the current user and clears local auth session.
+ */
+export async function signOut(
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await client.auth.signOut();
+    if (error) {
+      return { data: null, error: mapError(error) };
+    }
+    for (const listener of authListeners) {
+      try {
+        listener(null);
+      } catch {
+        // ignore
+      }
+    }
+    return { data: undefined, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+/**
+ * Gets the current authenticated user and their profile.
+ */
+export async function getCurrentUser(
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<CurrentUser | null>> {
+  try {
+    const { data: authData, error: authError } = await client.auth.getUser();
+    if (authError || !authData?.user) {
+      return { data: null, error: null };
+    }
+
+    const user = authData.user;
+    const { data: profile, error: profileError } = await client
+      .from('profiles')
+      .select('id, username, display_name, username_set')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      return { data: null, error: mapError(profileError) };
+    }
+
+    if (profile) {
+      return {
+        data: {
+          id: profile.id,
+          username: profile.username,
+          displayName: profile.display_name,
+          usernameSet: profile.username_set,
+        },
+        error: null,
+      };
+    }
+
+    // Fallback if profile row is still being populated by handle_new_user trigger
+    const metadata = user.user_metadata || {};
+    return {
+      data: {
+        id: user.id,
+        username: (metadata.username as string) || user.email?.split('@')[0] || 'user',
+        displayName: (metadata.full_name as string) || (metadata.name as string) || 'User',
+        usernameSet: false,
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+/**
+ * Subscribes to auth state changes (login, logout, token refresh).
+ */
+export function onAuthChange(
+  callback: (user: CurrentUser | null) => void,
+  client: SupabaseClient<Database> = defaultClient
+): () => void {
+  authListeners.add(callback);
+
+  // Immediately notify caller with initial auth state
+  getCurrentUser(client).then((res) => {
+    callback(res.data);
+  });
+
+  const {
+    data: { subscription },
+  } = client.auth.onAuthStateChange(async (_event, session) => {
+    if (session?.user) {
+      emitAuthChange(client);
+    } else {
+      for (const listener of authListeners) {
+        try {
+          listener(null);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  });
+
+  return () => {
+    authListeners.delete(callback);
+    subscription.unsubscribe();
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Settings RPCs / Fallbacks (REQ-SETTINGS-01, REQ-SETTINGS-02)
+// ---------------------------------------------------------------------------
+
+/**
+ * Updates the display name for the current authenticated user.
+ */
+export async function updateDisplayName(
+  displayName: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<void>> {
+  const trimmed = displayName.trim();
+  if (!trimmed || trimmed.length > 50) {
+    return {
+      data: null,
+      error: { code: 'VALIDATION_ERROR', message: 'Display name must be between 1 and 50 characters.' },
+    };
+  }
+
+  try {
+    const { data: authData, error: authError } = await client.auth.getUser();
+    if (authError || !authData?.user) {
+      return {
+        data: null,
+        error: { code: 'UNAUTHENTICATED', message: 'User is not signed in.' },
+      };
+    }
+
+    const { error } = await client
+      .from('profiles')
+      .update({
+        display_name: trimmed,
+      })
+      .eq('id', authData.user.id);
+
+    if (error) {
+      return { data: null, error: mapError(error) };
+    }
+
+    emitAuthChange(client);
+    return { data: undefined, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+/**
+ * Lists users blocked by the authenticated user.
+ */
+export async function listBlockedUsers(
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<BlockedUser[]>> {
+  try {
+    const { data: authData, error: authError } = await client.auth.getUser();
+    if (authError || !authData?.user) {
+      return {
+        data: null,
+        error: { code: 'UNAUTHENTICATED', message: 'User is not signed in.' },
+      };
+    }
+
+    // Try RPC first if created on database
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rpcRes = await (client as any).rpc('list_blocked_users');
+    if (!rpcRes.error && Array.isArray(rpcRes.data)) {
+      return {
+        data: rpcRes.data.map((r: { id: string; username: string; display_name: string }) => ({
+          id: r.id,
+          username: r.username,
+          displayName: r.display_name,
+        })),
+        error: null,
+      };
+    }
+
+    // Fallback: direct query on blocks joined with profiles
+    const { data, error } = await client
+      .from('blocks')
+      .select('blocked_id, profiles!blocks_blocked_id_fkey(id, username, display_name)')
+      .eq('blocker_id', authData.user.id);
+
+    if (error) {
+      return { data: null, error: mapError(error) };
+    }
+
+    const blocked: BlockedUser[] = [];
+    for (const row of data || []) {
+      const p = row.profiles as unknown as { id: string; username: string; display_name: string } | null;
+      if (p) {
+        blocked.push({
+          id: p.id,
+          username: p.username,
+          displayName: p.display_name,
+        });
+      }
+    }
+
+    return { data: blocked, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
 }

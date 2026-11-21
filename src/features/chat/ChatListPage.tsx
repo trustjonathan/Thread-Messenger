@@ -3,9 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   listConversations,
   subscribeToUserMessages,
+  getCurrentUser,
 } from '@/lib/apiClient';
 import type { ConversationSummary } from '@/types/api';
-import { getCurrentUser } from '../auth/authMock';
 import { Avatar } from './components/Avatar';
 import { getHumanErrorMessage } from './components/ErrorMessage';
 import { Plus, Copy, Check, RefreshCw, MessageSquare, AlertCircle } from 'lucide-react';
