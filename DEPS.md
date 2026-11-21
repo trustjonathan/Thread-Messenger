@@ -9,6 +9,8 @@ This document tracks all approved dependencies for Thread Messenger. Builders mu
 | `react` | `^18.3.1` | Core UI library |
 | `react-dom` | `^18.3.1` | React DOM renderer |
 | `@supabase/supabase-js` | `^2.49.1` | Official client for Supabase Auth, PostgreSQL PostgREST API, and Realtime WebSocket changes |
+| `react-router-dom` | `^7.18.6` | Client-side routing for `/chats`, `/chats/:conversationId`, `/chats/new`, `/login`, etc. |
+| `lucide-react` | `^1.77.0` | Accessible SVG icons for navigation, message states, modals, and actions |
 
 ## Development Dependencies
 

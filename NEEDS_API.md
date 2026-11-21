@@ -8,6 +8,7 @@ This file is a template for downstream builders (UI, PWA, testing teams) to requ
    - `supabase/migrations/*`
    - `src/types/*`
    - `src/lib/api.ts`
+   - `src/lib/apiClient.ts`
    - `.env.example`
 2. If your feature requires database modifications or new RPC functions, open an issue or record your request in the table below.
 
@@ -15,4 +16,5 @@ This file is a template for downstream builders (UI, PWA, testing teams) to requ
 
 | ID | Requester | Requested Capability | Motivation | Proposed Types / Schema | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| *(None)* | | | | | |
+| `REQ-AUTH-01` | Lovable (Auth/Chat Scope) | `signInWithGoogle()` and `getCurrentUser()` | Auth flow requires Google OAuth login and fetching session/user profile data to display current username in headers and authenticate chat requests. | `signInWithGoogle(): Promise<ApiResult<void>>`<br/>`getCurrentUser(): Promise<ApiResult<{ id: string; username: string; displayName: string; usernameSet: boolean }>>` | Pending |
+| `REQ-CHAT-01` | Lovable (Auth/Chat Scope) | `getConversation(conversationId: string)` | Direct retrieval of single conversation metadata & other participant info on `/chats/:id` route, eliminating fallback of scanning `listConversations()`. | `getConversation(conversationId: string): Promise<ApiResult<ConversationSummary>>` | Pending |
