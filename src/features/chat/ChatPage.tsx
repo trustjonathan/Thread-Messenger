@@ -66,6 +66,40 @@ export default function ChatPage() {
   const messageListContainerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<HTMLElement>(null);
+  const [composerHeight, setComposerHeight] = useState(64);
+
+  // Measure composer height with ResizeObserver
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    const updateHeight = () => {
+      setComposerHeight(el.getBoundingClientRect().height);
+    };
+    updateHeight();
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {
+        updateHeight();
+      });
+      observer.observe(el);
+      return () => observer.disconnect();
+    }
+  }, []);
+
+  // Auto-grow textarea up to ~6 lines (max ~144px), then scroll inside
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const scrollHeight = textarea.scrollHeight;
+    const clampedHeight = Math.min(Math.max(scrollHeight, 44), 144);
+    textarea.style.height = `${clampedHeight}px`;
+    textarea.style.overflowY = scrollHeight > 144 ? 'auto' : 'hidden';
+  }, []);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [inputBody, adjustTextareaHeight]);
 
   // Close header menu on click outside
   useEffect(() => {
@@ -322,6 +356,13 @@ export default function ChatPage() {
       targetClientId = newClientId();
       targetBody = trimmed;
       setInputBody('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.overflowY = 'hidden';
+      }
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      });
 
       const optimisticMsg: ChatMessage = {
         clientId: targetClientId,
@@ -377,6 +418,10 @@ export default function ChatPage() {
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Do NOT send while IME composition is active
+    if (e.nativeEvent.isComposing || (e as unknown as { isComposing?: boolean }).isComposing) {
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -409,7 +454,7 @@ export default function ChatPage() {
   const isSendDisabled = inputBody.trim().length === 0 || charCount > 2000;
 
   return (
-    <div className="flex flex-col h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+    <div className="flex flex-col h-[100dvh] w-full relative bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden">
       {/* Header */}
       <header className="shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between z-10">
         <div className="flex items-center gap-3 min-w-0">
@@ -486,6 +531,7 @@ export default function ChatPage() {
       <div
         ref={messageListContainerRef}
         className="flex-1 overflow-y-auto p-4 space-y-3"
+        style={{ paddingBottom: `${composerHeight + 24}px` }}
         role="region"
         aria-label="Message history"
         aria-live="polite"
@@ -629,45 +675,66 @@ export default function ChatPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Composer */}
-      <footer className="shrink-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-3 sm:p-4">
+      {/* Floating Composer */}
+      <footer
+        ref={composerRef}
+        className="fixed inset-x-0 z-20 px-3 flex justify-center pointer-events-none"
+        style={{
+          bottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+        }}
+      >
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleSend();
           }}
-          className="max-w-3xl mx-auto"
+          className="pointer-events-auto w-full max-w-[672px] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-lg p-2 flex flex-col focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-shadow"
         >
-          <div className="relative flex items-end gap-2 bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-2 border border-slate-300 dark:border-slate-700 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent">
+          <div className="flex items-end gap-2 w-full">
+            <label htmlFor="composer-message-input" className="sr-only">
+              Message
+            </label>
             <textarea
+              id="composer-message-input"
               ref={textareaRef}
               rows={1}
               value={inputBody}
               onChange={(e) => setInputBody(e.target.value)}
               onKeyDown={handleKeyDown}
               maxLength={2000}
-              placeholder="Write a message... (Enter to send, Shift+Enter for new line)"
-              className="flex-1 max-h-32 min-h-[40px] py-2 px-2 bg-transparent text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 resize-none focus:outline-none"
-              aria-label="Message body"
+              placeholder="Message"
+              aria-label="Message"
+              className="flex-1 min-h-[44px] max-h-[144px] py-2.5 px-3 bg-transparent text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 resize-none focus:outline-none leading-relaxed"
             />
 
             <button
               type="submit"
               disabled={isSendDisabled}
-              className="p-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px] min-w-[44px] ${
+                isSendDisabled
+                  ? 'bg-indigo-300 dark:bg-indigo-950/60 text-white/50 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-sm'
+              }`}
               aria-label="Send message"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-4 h-4 ml-0.5" />
             </button>
           </div>
 
-          {/* 2000-char counter and subtle notice */}
-          <div className="flex items-center justify-between px-1 mt-1 text-[11px] text-slate-400 dark:text-slate-500">
-            <span>Press Enter to send</span>
-            <span className={charCount > 1900 ? 'text-amber-500 font-semibold' : ''}>
-              {charCount}/2000
-            </span>
-          </div>
+          {/* 2000-char counter: hidden unless draft is 1800+ chars, turns red at 2000 */}
+          {charCount >= 1800 && (
+            <div className="flex justify-end px-3 pt-1 pb-0.5 text-[11px]">
+              <span
+                className={
+                  charCount >= 2000
+                    ? 'text-red-600 dark:text-red-400 font-semibold'
+                    : 'text-amber-600 dark:text-amber-400'
+                }
+              >
+                {charCount}/2000
+              </span>
+            </div>
+          )}
         </form>
       </footer>
 

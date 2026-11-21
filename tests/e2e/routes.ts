@@ -86,7 +86,7 @@ export const SELECTORS = {
     confirmBlockButton: (page: Page) =>
       page.getByRole('button', { name: 'Block User' }),
     messageInput: (page: Page) =>
-      page.getByPlaceholder('Type a message...'),
+      page.getByRole('textbox', { name: 'Message' }),
     sendButton: (page: Page) =>
       page.getByRole('button', { name: 'Send message' }),
     sendingIndicator: (page: Page) =>
