@@ -32,3 +32,4 @@ This document tracks all approved dependencies for Thread Messenger. Builders mu
 | `eslint-plugin-react-hooks` | `^5.1.0` | ESLint enforcement of React Hooks rules |
 | `ws` | `^8.18.1` | WebSocket implementation for Node.js integration test runner (Node < 22) |
 | `@types/ws` | `^8.18.0` | TypeScript definitions for `ws` |
+| `vite-plugin-pwa` | `^2.0.0` | PWA options type and service worker manifest support |
