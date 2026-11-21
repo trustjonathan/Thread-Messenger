@@ -7,6 +7,18 @@ test.describe('Thread Messenger E2E User Journeys (Mock Mode)', () => {
     await expect(page).toHaveTitle(/Thread/i);
   });
 
+  test('with real API selected and no session, the app lands on /signin and makes zero RPC calls', async ({ page }) => {
+    const rpcCalls: string[] = [];
+    await page.route('**/rest/v1/rpc/**', (route) => {
+      rpcCalls.push(route.request().url());
+      return route.fulfill({ status: 401, body: JSON.stringify({ message: 'UNAUTHENTICATED' }) });
+    });
+
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/signin$/);
+    expect(rpcCalls).toHaveLength(0);
+  });
+
   test('1. Landing Page presentation', async ({ page }) => {
     // Waits for Router integration in App.tsx to mount LandingPage at '/'
     test.fixme(true, 'Waits for App.tsx router to mount LandingPage at /');

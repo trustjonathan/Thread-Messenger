@@ -653,6 +653,8 @@ export async function getCurrentUser(
 
 /**
  * Subscribes to auth state changes (login, logout, token refresh).
+ * The callback is invoked once immediately with the current state,
+ * and again each time the auth state changes.
  */
 export function onAuthChange(
   callback: (user: CurrentUser | null) => void,
@@ -660,16 +662,21 @@ export function onAuthChange(
 ): () => void {
   authListeners.add(callback);
 
-  // Immediately notify caller with initial auth state
-  getCurrentUser(client).then((res) => {
-    callback(res.data);
-  });
-
+  // Let Supabase's onAuthStateChange be the single source of truth.
+  // It fires INITIAL_SESSION on subscribe, so we don't need a separate getCurrentUser call.
   const {
     data: { subscription },
   } = client.auth.onAuthStateChange(async (_event, session) => {
     if (session?.user) {
-      emitAuthChange(client);
+      // Fetch profile to build CurrentUser
+      const res = await getCurrentUser(client);
+      for (const listener of authListeners) {
+        try {
+          listener(res.data);
+        } catch {
+          // ignore
+        }
+      }
     } else {
       for (const listener of authListeners) {
         try {

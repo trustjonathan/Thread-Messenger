@@ -5,6 +5,8 @@ import {
   sendMessage,
   subscribeToUserMessages,
   newClientId,
+  getCurrentUser,
+  onAuthChange,
 } from '../../src/lib/api';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../../src/types/database';
@@ -217,6 +219,38 @@ describe('API Unit Tests (Mocked Client)', () => {
       expect(mockWin.removeEventListener).toHaveBeenCalledWith('focus', expect.any(Function));
       expect(mockChannel.unsubscribe).toHaveBeenCalled();
       expect(mockClient.removeChannel).toHaveBeenCalledWith(mockChannel);
+    });
+  });
+
+  describe('Real API Auth Guard (No Session)', () => {
+    it('with real API selected and no session, resolves unauthenticated state with zero RPC calls', async () => {
+      const rpcSpy = vi.fn();
+      const mockClient = {
+        auth: {
+          getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
+          onAuthStateChange: vi.fn().mockImplementation((cb) => {
+            cb('INITIAL_SESSION', null);
+            return { data: { subscription: { unsubscribe: vi.fn() } } };
+          }),
+        },
+        rpc: rpcSpy,
+      } as unknown as SupabaseClient<Database>;
+
+      // 1. getCurrentUser resolves null user without calling RPC
+      const userRes = await getCurrentUser(mockClient);
+      expect(userRes.data).toBeNull();
+      expect(rpcSpy).toHaveBeenCalledTimes(0);
+
+      // 2. onAuthChange receives null user without calling RPC
+      let notifiedUser: unknown = 'initial';
+      const unsubscribe = onAuthChange((u) => {
+        notifiedUser = u;
+      }, mockClient);
+
+      expect(notifiedUser).toBeNull();
+      expect(rpcSpy).toHaveBeenCalledTimes(0);
+
+      unsubscribe();
     });
   });
 });

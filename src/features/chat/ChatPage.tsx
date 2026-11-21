@@ -165,13 +165,11 @@ export default function ChatPage() {
         const userRes = await getCurrentUser();
         if (mounted && userRes?.data) {
           setCurrentUserId(userRes.data.id);
+          await loadConversationMeta();
+          await fetchInitialMessages();
         }
       } catch {
         // ignore
-      }
-      if (mounted) {
-        await loadConversationMeta();
-        await fetchInitialMessages();
       }
     })();
 

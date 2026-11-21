@@ -45,12 +45,10 @@ export default function ChatListPage() {
         const userRes = await getCurrentUser();
         if (mounted && userRes?.data) {
           setCurrentUser(userRes.data);
+          await fetchConversations();
         }
       } catch {
         // ignore
-      }
-      if (mounted) {
-        await fetchConversations();
       }
     })();
 

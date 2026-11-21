@@ -6,7 +6,7 @@ import {
   Navigate,
   useLocation,
 } from 'react-router-dom';
-import { getCurrentUser, onAuthChange, updateLastSeen } from '@/lib/apiClient';
+import { onAuthChange, updateLastSeen } from '@/lib/apiClient';
 import type { CurrentUser } from '@/types/api';
 
 // Pages
@@ -28,6 +28,38 @@ interface ProtectedRouteProps {
   user: CurrentUser | null;
   loading: boolean;
   children: ReactNode;
+}
+
+/**
+ * Root route guard:
+ * - Signed out -> /signin
+ * - Signed in with usernameSet === false -> /choose-username
+ * - Signed in with usernameSet === true -> /chats
+ */
+function RootRoute({
+  user,
+  loading,
+}: {
+  user: CurrentUser | null;
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/signin" replace />;
+  }
+
+  if (!user.usernameSet) {
+    return <Navigate to="/choose-username" replace />;
+  }
+
+  return <Navigate to="/chats" replace />;
 }
 
 /**
@@ -126,20 +158,9 @@ export function App() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Auth state listener
+  // Auth state listener — onAuthChange fires immediately with INITIAL_SESSION
   useEffect(() => {
     let mounted = true;
-
-    getCurrentUser()
-      .then((res) => {
-        if (mounted) {
-          setUser(res.data ?? null);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (mounted) setLoading(false);
-      });
 
     const unsubscribe = onAuthChange((newUser) => {
       if (mounted) {
@@ -194,15 +215,11 @@ export function App() {
     <BrowserRouter>
       <OfflineBanner />
       <Routes>
-        {/* Landing Page */}
-        <Route
-          path="/"
-          element={
-            <GuestRoute user={user} loading={loading}>
-              <LandingPage />
-            </GuestRoute>
-          }
-        />
+        {/* Root Route: signed-out -> /signin; signed-in -> /chats or /choose-username */}
+        <Route path="/" element={<RootRoute user={user} loading={loading} />} />
+
+        {/* Public Landing Page */}
+        <Route path="/landing" element={<LandingPage />} />
 
         {/* Sign In */}
         <Route
@@ -269,7 +286,7 @@ export function App() {
           path="*"
           element={
             <Navigate
-              to={user ? (user.usernameSet ? '/chats' : '/choose-username') : '/'}
+              to={user ? (user.usernameSet ? '/chats' : '/choose-username') : '/signin'}
               replace
             />
           }

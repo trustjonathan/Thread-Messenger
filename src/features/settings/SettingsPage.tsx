@@ -56,6 +56,7 @@ export default function SettingsPage() {
       setDisplayName(res.data.displayName);
       setDisplayNameDraft(res.data.displayName);
       setPageState('ready');
+      loadBlocked();
     } catch {
       setPageState('error');
     }
@@ -76,8 +77,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadUser();
-    loadBlocked();
-  }, [loadUser, loadBlocked]);
+  }, [loadUser]);
 
   // ── Handlers ─────────────────────────────────────────────────────
   const handleCopy = async () => {
