@@ -13,32 +13,66 @@ export interface BlockedUser {
   displayName: string;
 }
 
-// Local mock for auth functions not yet in @/lib/apiClient (documented in NEEDS_API.md)
-let mockUser: CurrentUser | null = {
-  id: '11111111-1111-1111-1111-111111111111',
-  username: 'current_user',
-  displayName: 'Current User',
-  usernameSet: true,
-};
+const STORAGE_KEY = 'thread_current_user';
+
+function getInitialUser(): CurrentUser | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+// Local mock user state (persists across page reloads via localStorage)
+let mockUser: CurrentUser | null = getInitialUser();
 
 // Seeded mock blocked users list (see NEEDS_API.md REQ-SETTINGS-01)
 const mockBlockedUsers: BlockedUser[] = [
   { id: '33333333-3333-3333-3333-333333333333', username: 'bob', displayName: 'Bob Jones' },
 ];
 
+const authListeners = new Set<(user: CurrentUser | null) => void>();
+
+function notifyAuthChange() {
+  for (const listener of authListeners) {
+    try {
+      listener(mockUser);
+    } catch {
+      // ignore
+    }
+  }
+}
+
 export async function signInWithGoogle(): Promise<ApiResult<void>> {
   await new Promise((res) => setTimeout(res, 300));
+  mockUser = {
+    id: '11111111-1111-1111-1111-111111111111',
+    username: 'current_user',
+    displayName: 'Current User',
+    usernameSet: true,
+  };
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser));
+  }
+  notifyAuthChange();
   return { data: undefined, error: null };
 }
 
 export async function signOut(): Promise<ApiResult<void>> {
   await new Promise((res) => setTimeout(res, 200));
   mockUser = null;
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+  notifyAuthChange();
   return { data: undefined, error: null };
 }
 
 export async function getCurrentUser(): Promise<ApiResult<CurrentUser | null>> {
-  await new Promise((res) => setTimeout(res, 100));
+  await new Promise((res) => setTimeout(res, 50));
   return { data: mockUser, error: null };
 }
 
@@ -52,6 +86,10 @@ export async function updateDisplayName(displayName: string): Promise<ApiResult<
     return { data: null, error: { code: 'VALIDATION_ERROR', message: 'Display name must be 1-50 characters.' } };
   }
   mockUser = { ...mockUser, displayName };
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser));
+  }
+  notifyAuthChange();
   return { data: undefined, error: null };
 }
 
@@ -62,6 +100,9 @@ export async function listBlockedUsers(): Promise<ApiResult<BlockedUser[]>> {
 }
 
 export function onAuthChange(cb: (user: CurrentUser | null) => void): () => void {
+  authListeners.add(cb);
   cb(mockUser);
-  return () => {};
+  return () => {
+    authListeners.delete(cb);
+  };
 }
