@@ -1,0 +1,8 @@
+# Contract Files Protection
+# Builders must not edit these files directly without contract governance approval.
+
+/supabase/migrations/  @trustjonathan
+/src/types/            @trustjonathan
+/src/lib/api.ts        @trustjonathan
+/src/lib/apiClient.ts  @trustjonathan
+/.env.example          @trustjonathan

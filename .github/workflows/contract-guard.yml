@@ -1,0 +1,45 @@
+name: Contract Guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  check-contract-changes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Check for modified contract files
+        id: diff-check
+        run: |
+          echo "Checking git diff against base branch: origin/${{ github.base_ref }}..."
+          CHANGED_FILES=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          CONTRACT_PATTERNS="^(supabase/migrations/|src/types/|src/lib/api\.ts|src/lib/apiClient\.ts|\.env\.example)"
+          TOUCHED_CONTRACT=$(echo "$CHANGED_FILES" | grep -E "$CONTRACT_PATTERNS" || true)
+
+          if [ -n "$TOUCHED_CONTRACT" ]; then
+            echo "Contract files modified:"
+            echo "$TOUCHED_CONTRACT"
+            echo "has_contract_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_contract_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enforce contract label
+        if: steps.diff-check.outputs.has_contract_changes == 'true'
+        run: |
+          HAS_LABEL="${{ contains(github.event.pull_request.labels.*.name, 'contract') }}"
+          if [ "$HAS_LABEL" != "true" ]; then
+            echo "::error::This pull request modifies contract files but lacks the required 'contract' label."
+            echo "Contract files (supabase/migrations, src/types, src/lib/api.ts, src/lib/apiClient.ts, .env.example) cannot be modified without explicit contract authorization."
+            exit 1
+          else
+            echo "Contract change approved via 'contract' label."
+          fi
