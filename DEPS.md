@@ -26,6 +26,7 @@ This document tracks all approved dependencies for Thread Messenger. Builders mu
 | `postcss` | `^8.5.3` | Tool for transforming CSS with plugins |
 | `autoprefixer` | `^10.4.20` | PostCSS plugin to parse CSS and add vendor prefixes |
 | `vitest` | `^3.0.7` | Fast unit and integration test runner compatible with Vite |
+| `@playwright/test` | `^1.65.1` | Browser-based end-to-end tests. |
 | `eslint` | `^8.57.1` | Static code analysis and linting |
 | `@typescript-eslint/eslint-plugin` | `^8.26.0` | TypeScript-specific linting rules |
 | `@typescript-eslint/parser` | `^8.26.0` | ESLint parser for TypeScript AST |
