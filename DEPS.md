@@ -33,3 +33,4 @@ This document tracks all approved dependencies for Thread Messenger. Builders mu
 | `ws` | `^8.18.1` | WebSocket implementation for Node.js integration test runner (Node < 22) |
 | `@types/ws` | `^8.18.0` | TypeScript definitions for `ws` |
 | `vite-plugin-pwa` | `^2.0.0` | PWA options type and service worker manifest support |
+| `@playwright/test` | `^1.65.1` | End-to-end browser testing framework for client flows in mock mode |
