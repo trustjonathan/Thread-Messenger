@@ -12,13 +12,13 @@ INSERT INTO auth.users (id, email) VALUES
 -- User A creates conversation with B
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims', '{"sub": "11111111-1111-1111-1111-111111111111", "role": "authenticated"}', true);
-SELECT public.get_or_create_direct_conversation('22222222-2222-2222-2222-222222222222') AS ab_conv_id \gset
-SELECT (public.send_message(:'ab_conv_id', 'Message to report', gen_random_uuid())).id AS ab_msg_id \gset
+SELECT set_config('app.ab_conv_id', public.get_or_create_direct_conversation('22222222-2222-2222-2222-222222222222')::text, true);
+SELECT set_config('app.ab_msg_id', (public.send_message(current_setting('app.ab_conv_id')::uuid, 'Message to report', gen_random_uuid())).id::text, true);
 
 -- User B creates conversation with C and sends a message
 SELECT set_config('request.jwt.claims', '{"sub": "22222222-2222-2222-2222-222222222222", "role": "authenticated"}', true);
-SELECT public.get_or_create_direct_conversation('33333333-3333-3333-3333-333333333333') AS bc_conv_id \gset
-SELECT (public.send_message(:'bc_conv_id', 'Private BC message', gen_random_uuid())).id AS bc_msg_id \gset
+SELECT set_config('app.bc_conv_id', public.get_or_create_direct_conversation('33333333-3333-3333-3333-333333333333')::text, true);
+SELECT set_config('app.bc_msg_id', (public.send_message(current_setting('app.bc_conv_id')::uuid, 'Private BC message', gen_random_uuid())).id::text, true);
 
 -- Switch back to User A
 SELECT set_config('request.jwt.claims', '{"sub": "11111111-1111-1111-1111-111111111111", "role": "authenticated"}', true);
@@ -34,12 +34,14 @@ EXCEPTION WHEN insufficient_privilege THEN
 END $$;
 
 -- 2. Report message in own conversation must succeed
-SELECT public.report_content(:'ab_msg_id', NULL, 'Inappropriate message');
+SELECT public.report_content(current_setting('app.ab_msg_id')::uuid, NULL, 'Inappropriate message');
 
 -- 3. Reporting a message in an unjoined conversation (BC) must fail with OPERATION_FAILED
 DO $$
+DECLARE
+  v_bc_msg_id uuid := current_setting('app.bc_msg_id')::uuid;
 BEGIN
-  PERFORM public.report_content(:'bc_msg_id', NULL, 'Trying to report stranger message');
+  PERFORM public.report_content(v_bc_msg_id, NULL, 'Trying to report stranger message');
   RAISE EXCEPTION 'TEST FAILED: Able to report message in stranger conversation';
 EXCEPTION WHEN OTHERS THEN
   IF SQLERRM NOT LIKE '%OPERATION_FAILED%' THEN
@@ -61,16 +63,17 @@ END $$;
 -- 5. Report rate limit: max 10 reports per hour
 DO $$
 DECLARE
+  v_ab_msg_id uuid := current_setting('app.ab_msg_id')::uuid;
   i int;
 BEGIN
   -- We already submitted 1 report. Submit 9 more to hit 10.
   FOR i IN 2..10 LOOP
-    PERFORM public.report_content(:'ab_msg_id', NULL, 'Report batch ' || i);
+    PERFORM public.report_content(v_ab_msg_id, NULL, 'Report batch ' || i);
   END LOOP;
 
   -- 11th report must fail with RATE_LIMITED
   BEGIN
-    PERFORM public.report_content(:'ab_msg_id', NULL, 'Report 11 should fail');
+    PERFORM public.report_content(v_ab_msg_id, NULL, 'Report 11 should fail');
     RAISE EXCEPTION 'TEST FAILED: 11th report succeeded past rate limit';
   EXCEPTION WHEN OTHERS THEN
     IF SQLERRM NOT LIKE '%RATE_LIMITED%' THEN

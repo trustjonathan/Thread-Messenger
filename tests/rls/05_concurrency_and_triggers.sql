@@ -1,5 +1,5 @@
--- Test 05: Concurrency and Signup Triggers
--- Verifies: advisory lock serialization, rate limit atomicity, and username trigger resilience.
+-- Test 05: Sequential Concurrency and Signup Triggers
+-- Verifies: sequential get_or_create idempotence, rate limit atomicity, and username trigger resilience.
 
 BEGIN;
 
@@ -65,19 +65,22 @@ BEGIN
   END IF;
 END $$;
 
--- 3. Test Advisory Lock Serialization on get_or_create_direct_conversation
+-- 3. Test Sequential Bidirectional get_or_create_direct_conversation
 -- Ensure calling from both sides produces the exact same conversation ID
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims', '{"sub": "aaaaaaaa-0000-0000-0000-000000000001", "role": "authenticated"}', true);
-SELECT public.get_or_create_direct_conversation('aaaaaaaa-0000-0000-0000-000000000002') AS conv_1 \gset
+SELECT set_config('app.conv_1', public.get_or_create_direct_conversation('aaaaaaaa-0000-0000-0000-000000000002')::text, true);
 
 SELECT set_config('request.jwt.claims', '{"sub": "aaaaaaaa-0000-0000-0000-000000000002", "role": "authenticated"}', true);
-SELECT public.get_or_create_direct_conversation('aaaaaaaa-0000-0000-0000-000000000001') AS conv_2 \gset
+SELECT set_config('app.conv_2', public.get_or_create_direct_conversation('aaaaaaaa-0000-0000-0000-000000000001')::text, true);
 
 DO $$
+DECLARE
+  v_c1 text := current_setting('app.conv_1');
+  v_c2 text := current_setting('app.conv_2');
 BEGIN
-  IF :'conv_1' <> :'conv_2' THEN
-    RAISE EXCEPTION 'TEST FAILED: get_or_create_direct_conversation returned different IDs for same pair: % vs %', :'conv_1', :'conv_2';
+  IF v_c1 <> v_c2 THEN
+    RAISE EXCEPTION 'TEST FAILED: get_or_create_direct_conversation returned different IDs for same pair: % vs %', v_c1, v_c2;
   END IF;
 END $$;
 

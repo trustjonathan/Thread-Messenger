@@ -13,10 +13,10 @@ INSERT INTO auth.users (id, email) VALUES
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims', '{"sub": "22222222-2222-2222-2222-222222222222", "role": "authenticated"}', true);
 
-SELECT public.get_or_create_direct_conversation('33333333-3333-3333-3333-333333333333') AS bc_conv_id \gset
+SELECT set_config('app.bc_conv_id', public.get_or_create_direct_conversation('33333333-3333-3333-3333-333333333333')::text, true);
 
 -- User B sends a message
-SELECT public.send_message(:'bc_conv_id', 'Private message from B to C', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+SELECT public.send_message(current_setting('app.bc_conv_id')::uuid, 'Private message from B to C', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 
 -- Switch to User A (Stranger)
 SELECT set_config('request.jwt.claims', '{"sub": "11111111-1111-1111-1111-111111111111", "role": "authenticated"}', true);
@@ -25,8 +25,9 @@ SELECT set_config('request.jwt.claims', '{"sub": "11111111-1111-1111-1111-111111
 DO $$
 DECLARE
   v_count int;
+  v_conv_id uuid := current_setting('app.bc_conv_id')::uuid;
 BEGIN
-  SELECT count(*) INTO v_count FROM public.conversations WHERE id = :'bc_conv_id';
+  SELECT count(*) INTO v_count FROM public.conversations WHERE id = v_conv_id;
   IF v_count <> 0 THEN
     RAISE EXCEPTION 'TEST FAILED: User A can see conversation BC';
   END IF;
@@ -36,8 +37,9 @@ END $$;
 DO $$
 DECLARE
   v_count int;
+  v_conv_id uuid := current_setting('app.bc_conv_id')::uuid;
 BEGIN
-  SELECT count(*) INTO v_count FROM public.messages WHERE conversation_id = :'bc_conv_id';
+  SELECT count(*) INTO v_count FROM public.messages WHERE conversation_id = v_conv_id;
   IF v_count <> 0 THEN
     RAISE EXCEPTION 'TEST FAILED: User A can see messages in conversation BC';
   END IF;
@@ -45,8 +47,10 @@ END $$;
 
 -- 3. User A calling send_message on conversation BC must fail with OPERATION_FAILED
 DO $$
+DECLARE
+  v_conv_id uuid := current_setting('app.bc_conv_id')::uuid;
 BEGIN
-  PERFORM public.send_message(:'bc_conv_id', 'Intruder message', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+  PERFORM public.send_message(v_conv_id, 'Intruder message', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
   RAISE EXCEPTION 'TEST FAILED: User A was able to send message to conversation BC';
 EXCEPTION WHEN OTHERS THEN
   IF SQLERRM NOT LIKE '%OPERATION_FAILED%' THEN
