@@ -8,7 +8,7 @@ import {
 import type { ConversationSummary } from '@/types/api';
 import { Avatar } from './components/Avatar';
 import { getHumanErrorMessage } from './components/ErrorMessage';
-import { Plus, Copy, Check, RefreshCw, MessageSquare, AlertCircle } from 'lucide-react';
+import { Plus, Copy, Check, RefreshCw, MessageSquare, AlertCircle, MoreVertical, Settings, Shield, FileText } from 'lucide-react';
 
 export default function ChatListPage() {
   const navigate = useNavigate();
@@ -18,6 +18,7 @@ export default function ChatListPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const fetchConversations = useCallback(async (isBackground = false) => {
     if (!isBackground) setIsRefreshing(true);
@@ -145,6 +146,18 @@ export default function ChatListPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <button type="button" onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Menu">
+                <MoreVertical className="w-4 h-4" />
+              </button>
+              {isMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg py-1.5 z-20">
+                  <Link to="/settings" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px]"><Settings className="w-4 h-4" /> Settings</Link>
+                  <Link to="/privacy" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px]"><Shield className="w-4 h-4" /> Privacy</Link>
+                  <Link to="/terms" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px]"><FileText className="w-4 h-4" /> Terms</Link>
+                </div>
+              )}
+            </div>
             {/* Refresh button */}
             <button
               type="button"
