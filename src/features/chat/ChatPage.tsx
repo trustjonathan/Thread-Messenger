@@ -13,6 +13,7 @@ import {
 } from '@/lib/apiClient';
 import type { MessageCursor, ConversationSummary, Message } from '@/types/api';
 import { Avatar } from './components/Avatar';
+import { MessageStatus } from '@/components/chat/MessageStatus';
 import { DateSeparator } from './components/DateSeparator';
 import { ReportModal } from './components/ReportModal';
 import { BlockModal } from './components/BlockModal';
@@ -21,7 +22,6 @@ import {
   ArrowLeft,
   MoreVertical,
   Send,
-  AlertCircle,
   RefreshCw,
   ShieldAlert,
   UserX,
@@ -647,23 +647,10 @@ export default function ChatPage() {
 
                   {isOwn && (
                     <>
-                      {msg.status === 'sending' && (
-                        <span className="text-slate-400">· sending...</span>
-                      )}
-                      {msg.status === 'sent' && (
-                        <span className="text-slate-400">· sent</span>
-                      )}
+                      {msg.status === 'sending' && <MessageStatus state="sending" />}
+                      {msg.status === 'sent' && <MessageStatus state="sent" />}
                       {msg.status === 'failed' && (
-                        <div className="flex items-center gap-1 text-red-500">
-                          <AlertCircle className="w-3 h-3" />
-                          <button
-                            type="button"
-                            onClick={() => handleSend(msg)}
-                            className="underline font-medium hover:text-red-700 dark:hover:text-red-400 min-h-[44px] inline-flex items-center"
-                          >
-                            Failed - Retry
-                          </button>
-                        </div>
+                        <MessageStatus state="failed" onRetry={() => handleSend(msg)} />
                       )}
                     </>
                   )}
