@@ -111,7 +111,7 @@ export default function ChatListPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center">
       <div className="w-full max-w-2xl px-4 py-6 flex flex-col flex-1">
         {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+        <header className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -146,7 +146,7 @@ export default function ChatListPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="relative">
+            <div className="absolute top-0 right-0 z-10">
               <button type="button" onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-indigo-500" aria-label="Menu">
                 <MoreVertical className="w-4 h-4" />
               </button>
