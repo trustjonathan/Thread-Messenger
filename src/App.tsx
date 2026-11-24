@@ -26,6 +26,7 @@ import TermsPage from './features/legal/TermsPage';
 import InstallPrompt from './pwa/InstallPrompt';
 import OfflineBanner from './pwa/OfflineBanner';
 import UpdateBanner from './pwa/UpdateBanner';
+import NotificationPrompt from './features/settings/NotificationPrompt';
 
 interface ProtectedRouteProps {
   user: CurrentUser | null;
@@ -218,6 +219,7 @@ export function App() {
     <BrowserRouter>
       <OfflineBanner />
       <UpdateBanner />
+      <NotificationPrompt />
       <Routes>
         {/* Root Route: signed-out -> /signin; signed-in -> /chats or /choose-username */}
         <Route path="/" element={<RootRoute user={user} loading={loading} />} />

@@ -10,6 +10,7 @@ import type { ConversationSummary } from '@/types/api';
 import { Avatar } from './components/Avatar';
 import { IdenticonAvatar } from './components/IdenticonAvatar';
 import { getHumanErrorMessage } from './components/ErrorMessage';
+import { showIncomingMessageNotification } from '@/lib/notifications';
 import { Plus, Copy, Check, RefreshCw, MessageSquare, AlertCircle, MoreVertical, Settings, Shield, FileText } from 'lucide-react';
 
 export default function ChatListPage() {
@@ -75,9 +76,26 @@ export default function ChatListPage() {
 
     const unsubscribe = subscribeToUserMessages(
       currentUser.id,
-      (_incomingMessage) => {
+      (incomingMsg) => {
         // Live update the list on new incoming message
         fetchConversations(true);
+
+        // Desktop notification for incoming message
+        if (
+          incomingMsg.senderId !== currentUser?.id &&
+          document.visibilityState !== 'visible'
+        ) {
+          const conv = conversations.find((c) => c.conversationId === incomingMsg.conversationId);
+          const title =
+            conv?.kind === 'group'
+              ? conv.title || 'Group'
+              : conv?.otherUser?.displayName || conv?.otherUser?.username || 'New message';
+          showIncomingMessageNotification({
+            conversationId: incomingMsg.conversationId,
+            title,
+            body: incomingMsg.body,
+          });
+        }
       },
       () => {
         // onResync fires on (re)connect, tab focus: refetch inside it

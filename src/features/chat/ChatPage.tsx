@@ -23,6 +23,7 @@ import { DateSeparator } from './components/DateSeparator';
 import { ReportModal } from './components/ReportModal';
 import { BlockModal } from './components/BlockModal';
 import { getHumanErrorMessage } from './components/ErrorMessage';
+import { showIncomingMessageNotification } from '@/lib/notifications';
 import {
   ArrowLeft,
   MoreVertical,
@@ -342,6 +343,22 @@ export default function ChatPage() {
 
         // Call markRead when new incoming message arrives while visible
         triggerMarkRead();
+
+        // Desktop notification for incoming message
+        if (
+          currentUserId &&
+          incomingMsg.senderId !== currentUserId &&
+          (document.visibilityState !== 'visible' || conversationId !== incomingMsg.conversationId)
+        ) {
+          const sender = groupMembers.find((m) => m.userId === incomingMsg.senderId);
+          const senderName = sender ? (sender.displayName || sender.username) : 'Someone';
+          const convoTitle = groupTitle || otherUser?.displayName || otherUser?.username || 'Chat';
+          showIncomingMessageNotification({
+            conversationId: incomingMsg.conversationId,
+            title: groupTitle ? `${senderName} in ${convoTitle}` : `${senderName}:`,
+            body: incomingMsg.body,
+          });
+        }
       },
       () => {
         // onResync fires on (re)connect, tab focus: refetch newest messages
