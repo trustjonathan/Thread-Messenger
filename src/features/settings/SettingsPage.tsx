@@ -26,6 +26,7 @@ import {
   AlertCircle,
   Bell,
   BellOff,
+  ArrowLeft,
 } from 'lucide-react';
 
 type PageState = 'loading' | 'ready' | 'error';
@@ -205,7 +206,16 @@ export default function SettingsPage() {
   return (
     <main className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <div className="max-w-lg mx-auto p-4 space-y-4">
-        <h1 className="text-2xl font-bold tracking-tight py-4">Settings</h1>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/chats"
+            className="p-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px] min-w-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            aria-label="Back to chats"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <h1 className="text-2xl font-bold tracking-tight py-4">Settings</h1>
+        </div>
 
         <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">

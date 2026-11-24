@@ -7,7 +7,6 @@ import {
   searchMessages,
 } from '@/lib/apiClient';
 import type { ConversationSummary } from '@/types/api';
-import { Avatar } from './components/Avatar';
 import { IdenticonAvatar } from './components/IdenticonAvatar';
 import { getHumanErrorMessage } from './components/ErrorMessage';
 import { showIncomingMessageNotification } from '@/lib/notifications';
@@ -300,7 +299,11 @@ export default function ChatListPage() {
                       {conv.kind === 'group' ? (
                         <IdenticonAvatar seed={conv.conversationId} label={displayName} size={40} variant="initials" />
                       ) : (
-                        <Avatar name={displayName} size="md" />
+                        <IdenticonAvatar
+                          seed={conv.otherUser?.avatarSeed ?? conv.otherUser?.username ?? ''}
+                          label={username || displayName}
+                          size={40}
+                        />
                       )}
 
                       <div className="flex-1 min-w-0">
