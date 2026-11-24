@@ -19,9 +19,9 @@ interface Props {
 }
 
 export function GroupSettingsDrawer({ conversationId, title, description, createdBy, currentUserId, onClose, onLeft }: Props) {
-  const isCreator = !!currentUserId && currentUserId === createdBy;
   const navigate = useNavigate();
   const { members, loading, error, rename, add, remove, leave, removeGroup, updateDescription } = useGroupSettings(conversationId, true);
+  const isCreator = !!currentUserId && (currentUserId === createdBy || members.some((m) => m.userId === currentUserId && m.role === 'admin'));
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [desc, setDesc] = useState(description || '');

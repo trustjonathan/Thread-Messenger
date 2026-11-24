@@ -304,6 +304,31 @@ export default function ChatPage() {
     const unsubscribe = subscribeToUserMessages(
       currentUserId,
       (incomingMsg: Message) => {
+        // Desktop notification for incoming message (checked before the
+        // early return so messages from other conversations also notify).
+        if (
+          currentUserId &&
+          incomingMsg.senderId !== currentUserId &&
+          (document.visibilityState !== 'visible' || incomingMsg.conversationId !== conversationId)
+        ) {
+          const sender = groupMembers.find((m) => m.userId === incomingMsg.senderId);
+          const senderName = sender
+            ? sender.displayName || sender.username
+            : otherUser?.displayName || otherUser?.username || 'Someone';
+          const convoTitle = groupTitle || otherUser?.displayName || otherUser?.username || 'Chat';
+          const title =
+            incomingMsg.conversationId === conversationId && groupTitle
+              ? `${senderName} in ${convoTitle}`
+              : incomingMsg.conversationId !== conversationId
+                ? 'New message'
+                : `${senderName}:`;
+          showIncomingMessageNotification({
+            conversationId: incomingMsg.conversationId,
+            title,
+            body: incomingMsg.body,
+          });
+        }
+
         if (incomingMsg.conversationId !== conversationId) return;
 
         // De-duplicate incoming realtime messages against the list by id AND clientId
@@ -343,22 +368,6 @@ export default function ChatPage() {
 
         // Call markRead when new incoming message arrives while visible
         triggerMarkRead();
-
-        // Desktop notification for incoming message
-        if (
-          currentUserId &&
-          incomingMsg.senderId !== currentUserId &&
-          (document.visibilityState !== 'visible' || conversationId !== incomingMsg.conversationId)
-        ) {
-          const sender = groupMembers.find((m) => m.userId === incomingMsg.senderId);
-          const senderName = sender ? (sender.displayName || sender.username) : 'Someone';
-          const convoTitle = groupTitle || otherUser?.displayName || otherUser?.username || 'Chat';
-          showIncomingMessageNotification({
-            conversationId: incomingMsg.conversationId,
-            title: groupTitle ? `${senderName} in ${convoTitle}` : `${senderName}:`,
-            body: incomingMsg.body,
-          });
-        }
       },
       () => {
         // onResync fires on (re)connect, tab focus: refetch newest messages

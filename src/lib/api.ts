@@ -1002,6 +1002,7 @@ export async function updateAvatarSeed(
   try {
     const { data, error } = await client.rpc('update_avatar_seed', { p_seed: seed });
     if (error) return { data: null, error: mapError(error) };
+    emitAuthChange(client);
     return { data: data as string, error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };

@@ -311,7 +311,7 @@ export default function SettingsPage() {
               ) : (
                 <BellOff className="w-5 h-5 text-slate-400" aria-hidden="true" />
               )}
-              <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Desktop notifications</span>
+              <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Notifications</span>
             </div>
             <div>
               {!isNotificationSupported() ? (

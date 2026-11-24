@@ -57,7 +57,7 @@ export default function NotificationPrompt() {
           <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Get notified about new messages</span>
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-          We’ll show a desktop notification when someone messages you while Thread is in the background.
+          We’ll show a notification when someone messages you while Thread is in the background.
         </p>
       </div>
 
