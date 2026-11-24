@@ -623,7 +623,7 @@ export async function getCurrentUser(
     const user = authData.user;
     const { data: profile, error: profileError } = await client
       .from('profiles')
-      .select('id, username, display_name, username_set')
+      .select('id, username, display_name, username_set, avatar_seed')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -638,6 +638,7 @@ export async function getCurrentUser(
           username: profile.username,
           displayName: profile.display_name,
           usernameSet: profile.username_set,
+          avatarSeed: profile.avatar_seed,
         },
         error: null,
       };
@@ -919,6 +920,7 @@ export async function listGroupMembers(
       role: r.role === 'admin' ? 'admin' : 'member',
       joinedAt: r.joined_at,
       lastReadAt: r.last_read_at,
+      avatarSeed: r.avatar_seed,
     }));
     return { data: members, error: null };
   } catch (err) {
@@ -934,7 +936,7 @@ export async function searchUsersByPrefix(
     const { data, error } = await client.rpc('search_users_by_prefix', { p_query: query });
     if (error) return { data: null, error: mapError(error) };
     return {
-      data: (data || []).map((r) => ({ id: r.id, username: r.username, displayName: r.display_name })),
+      data: (data || []).map((r) => ({ id: r.id, username: r.username, displayName: r.display_name, avatarSeed: null })),
       error: null,
     };
   } catch (err) {
@@ -988,6 +990,19 @@ export async function updateGroupDescription(
     });
     if (error) return { data: null, error: mapError(error) };
     return { data: (data as string) ?? '', error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function updateAvatarSeed(
+  seed: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<string>> {
+  try {
+    const { data, error } = await client.rpc('update_avatar_seed', { p_seed: seed });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: data as string, error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };
   }

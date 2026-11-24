@@ -192,6 +192,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_seed: string | null
           created_at: string
           display_name: string
           id: string
@@ -200,6 +201,7 @@ export type Database = {
           username_set: boolean
         }
         Insert: {
+          avatar_seed?: string | null
           created_at?: string
           display_name: string
           id: string
@@ -208,6 +210,7 @@ export type Database = {
           username_set?: boolean
         }
         Update: {
+          avatar_seed?: string | null
           created_at?: string
           display_name?: string
           id?: string
@@ -301,7 +304,7 @@ export type Database = {
       leave_group: { Args: { p_conversation_id: string }; Returns: undefined }
       list_group_members: {
         Args: { p_conversation_id: string }
-        Returns: { user_id: string; username: string; display_name: string; role: string; joined_at: string; last_read_at: string }[]
+        Returns: { user_id: string; username: string; display_name: string; role: string; joined_at: string; last_read_at: string; avatar_seed: string | null }[]
       }
       search_users_by_prefix: {
         Args: { p_query: string }
@@ -312,6 +315,7 @@ export type Database = {
         Returns: { conversation_id: string; message_id: string; body: string; created_at: string }[]
       }
       set_typing: { Args: { p_conversation_id: string }; Returns: undefined }
+      update_avatar_seed: { Args: { p_seed: string }; Returns: string }
       update_group_description: { Args: { p_conversation_id: string; p_description: string }; Returns: string }
       remove_group_member: { Args: { p_conversation_id: string; p_user_id: string }; Returns: undefined }
       rename_group: { Args: { p_conversation_id: string; p_title: string }; Returns: string }

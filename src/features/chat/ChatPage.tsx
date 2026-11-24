@@ -7,6 +7,7 @@ import {
   newClientId,
   markRead,
   setTyping,
+  listGroupMembers,
   blockUser,
   reportContent,
   subscribeToUserMessages,
@@ -16,6 +17,7 @@ import type { MessageCursor, ConversationSummary, Message } from '@/types/api';
 import { Avatar } from './components/Avatar';
 import { GroupHeader } from './components/GroupHeader';
 import { GroupSettingsDrawer } from './components/GroupSettingsDrawer';
+import { IdenticonAvatar } from './components/IdenticonAvatar';
 import { MessageStatus } from '@/components/chat/MessageStatus';
 import { DateSeparator } from './components/DateSeparator';
 import { ReportModal } from './components/ReportModal';
@@ -59,6 +61,7 @@ export default function ChatPage() {
   const [groupCreatedBy, setGroupCreatedBy] = useState<string | null>(null);
   const [groupDescription, setGroupDescription] = useState<string | null>(null);
   const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
+  const [groupMembers, setGroupMembers] = useState<import('@/types/api').GroupMember[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<MessageCursor | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -169,6 +172,13 @@ export default function ChatPage() {
       // Handled gracefully
     }
   }, [conversationId]);
+
+  useEffect(() => {
+    let active = true;
+    if (!conversationId || !groupTitle) return;
+    listGroupMembers(conversationId).then((res) => { if (active) setGroupMembers(res.data || []); });
+    return () => { active = false; };
+  }, [conversationId, groupTitle]);
 
   // Load initial messages (API returns newest first; reverse for bottom-newest display)
   const fetchInitialMessages = useCallback(async () => {
@@ -482,26 +492,21 @@ export default function ChatPage() {
           </Link>
 
           {groupTitle ? (
-            <GroupHeader conversationId={conversationId || ''} title={groupTitle} memberCount={memberCount} onClick={() => setIsGroupSettingsOpen(true)} />
+            <div className="min-w-0">
+              <GroupHeader conversationId={conversationId || ''} title={groupTitle} memberCount={memberCount} onClick={() => setIsGroupSettingsOpen(true)} />
+              {groupDescription && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{groupDescription}</p>
+              )}
+            </div>
           ) : (
-            <Avatar name={otherDisplayName} size="sm" />
+            <>
+              <Avatar name={otherDisplayName} size="sm" />
+              <div className="min-w-0">
+                <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{otherDisplayName}</h1>
+                {otherUsername && <p className="text-xs text-slate-500 dark:text-slate-400 truncate">@{otherUsername}</p>}
+              </div>
+            </>
           )}
-
-          <div className="min-w-0">
-            <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
-              {otherDisplayName}
-            </h1>
-            {!groupTitle && otherUsername && (
-              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                @{otherUsername}
-              </p>
-            )}
-            {groupTitle && (
-              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                {memberCount} members
-              </p>
-            )}
-          </div>
         </div>
 
         {/* Options Menu (Report, Block) */}
@@ -654,6 +659,18 @@ export default function ChatPage() {
               {showDateSeparator && <DateSeparator date={msg.createdAt} />}
 
               <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                {groupTitle && (() => {
+                  const sender = groupMembers.find((m) => m.userId === msg.senderId);
+                  if (!sender) return null;
+                  return (
+                    <div className="flex items-center gap-1.5 mb-1 px-1 text-[11px] text-slate-500 dark:text-slate-400">
+                      <IdenticonAvatar seed={sender.avatarSeed || sender.userId} label={sender.displayName || sender.username} size={18} />
+                      <span className="font-medium">{sender.displayName || sender.username}</span>
+                      <span>@{sender.username}</span>
+                    </div>
+                  );
+                })()}
+
                 <div
                   className={`max-w-[80%] sm:max-w-md px-4 py-2.5 rounded-2xl text-sm break-words whitespace-pre-wrap ${
                     isOwn

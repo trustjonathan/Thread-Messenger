@@ -24,6 +24,7 @@ export interface UserProfilePreview {
   id: string;
   username: string;
   displayName: string;
+  avatarSeed?: string | null;
 }
 
 export interface CurrentUser {
@@ -31,6 +32,7 @@ export interface CurrentUser {
   username: string;
   displayName: string;
   usernameSet: boolean;
+  avatarSeed?: string | null;
 }
 
 export type BlockedUser = UserProfilePreview;
@@ -69,6 +71,7 @@ export interface GroupMember {
   role: 'admin' | 'member';
   joinedAt: string;
   lastReadAt: string;
+  avatarSeed?: string | null;
 }
 
 export interface MessageCursor {

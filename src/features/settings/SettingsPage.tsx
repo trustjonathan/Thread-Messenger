@@ -7,7 +7,9 @@ import {
   signOut,
   updateDisplayName,
   listBlockedUsers,
+  updateAvatarSeed,
 } from '@/lib/apiClient';
+import { IdenticonAvatar } from '@/features/chat/components/IdenticonAvatar';
 import type { BlockedUser } from '@/types/api';
 import {
   Copy,
@@ -42,6 +44,7 @@ export default function SettingsPage() {
 
   // ── Sign out state ───────────────────────────────────────────────
   const [signingOut, setSigningOut] = useState(false);
+  const [avatarSeed, setAvatarSeed] = useState('');
 
   // ── Load user ────────────────────────────────────────────────────
   const loadUser = useCallback(async () => {
@@ -55,6 +58,7 @@ export default function SettingsPage() {
       setUsername(res.data.username);
       setDisplayName(res.data.displayName);
       setDisplayNameDraft(res.data.displayName);
+      setAvatarSeed(res.data.avatarSeed || res.data.id);
       setPageState('ready');
       loadBlocked();
     } catch {
@@ -179,6 +183,15 @@ export default function SettingsPage() {
     <main className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <div className="max-w-lg mx-auto p-4 space-y-4">
         <h1 className="text-2xl font-bold tracking-tight py-4">Settings</h1>
+
+        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Avatar</h2>
+          <div className="flex items-center gap-3">
+            <IdenticonAvatar seed={avatarSeed || username} label={displayName || username} size={48} />
+            <input value={avatarSeed} onChange={(e) => setAvatarSeed(e.target.value)} maxLength={64} className="flex-1 p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" />
+            <button type="button" onClick={async () => { await updateAvatarSeed(avatarSeed || username); }} className="px-3 rounded-xl bg-indigo-600 text-white min-h-[44px]">Save</button>
+          </div>
+        </section>
 
         {/* ── Username ──────────────────────────────────────────── */}
         <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">

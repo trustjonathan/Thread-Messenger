@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Plus, Trash2, LogOut, AlertTriangle } from 'lucide-react';
-import { searchUsersByPrefix } from '@/lib/apiClient';
+import { searchUsersByPrefix, getOrCreateDirectConversation } from '@/lib/apiClient';
+import { useNavigate } from 'react-router-dom';
 import type { UserProfilePreview } from '@/types/api';
 import { useGroupSettings } from '../hooks/useGroupSettings';
 import { GroupMemberRow } from './GroupMemberRow';
@@ -19,6 +20,7 @@ interface Props {
 
 export function GroupSettingsDrawer({ conversationId, title, description, createdBy, currentUserId, onClose, onLeft }: Props) {
   const isCreator = !!currentUserId && currentUserId === createdBy;
+  const navigate = useNavigate();
   const { members, loading, error, rename, add, remove, leave, removeGroup, updateDescription } = useGroupSettings(conversationId, true);
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
@@ -105,7 +107,7 @@ export function GroupSettingsDrawer({ conversationId, title, description, create
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
           {loading && <p className="text-sm text-slate-500 py-2">Loading...</p>}
           {members.map((m) => (
-            <GroupMemberRow key={m.userId} member={m} currentUserId={currentUserId} isCreator={isCreator} onRemove={(userId) => setConfirm({ type: 'remove', userId, label: m.username })} />
+            <GroupMemberRow key={m.userId} member={m} currentUserId={currentUserId} isCreator={isCreator} onRemove={(userId) => setConfirm({ type: 'remove', userId, label: m.username })} onOpen={async (userId) => { const res = await getOrCreateDirectConversation(userId); if (res.data) navigate(`/chats/${res.data}`); }} />
           ))}
         </div>
 

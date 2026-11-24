@@ -183,6 +183,7 @@ export async function listConversations(): Promise<ApiResult<ConversationSummary
       title: null,
       description: null,
       createdBy: null,
+      avatarSeed: null,
       otherUser: c.otherUser,
       memberCount: 2,
       lastMessage: lastMsg
@@ -487,6 +488,7 @@ export async function searchMessages(): Promise<ApiResult<Array<{ conversationId
 export async function setTyping(): Promise<ApiResult<void>> {
   return { data: undefined, error: null };
 }
+export async function updateAvatarSeed(): Promise<ApiResult<string>> { return { data: '', error: null }; }
 export async function updateGroupDescription(): Promise<ApiResult<string>> {
   return { data: '', error: null };
 }
@@ -527,6 +529,7 @@ const _mockSurface = {
   searchMessages,
   setTyping,
   updateGroupDescription,
+  updateAvatarSeed,
 } satisfies typeof RealApi;
 
 void _mockSurface;
