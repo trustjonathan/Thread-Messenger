@@ -23,6 +23,7 @@ import TermsPage from './features/legal/TermsPage';
 // PWA Components
 import InstallPrompt from './pwa/InstallPrompt';
 import OfflineBanner from './pwa/OfflineBanner';
+import UpdateBanner from './pwa/UpdateBanner';
 
 interface ProtectedRouteProps {
   user: CurrentUser | null;
@@ -214,6 +215,7 @@ export function App() {
   return (
     <BrowserRouter>
       <OfflineBanner />
+      <UpdateBanner />
       <Routes>
         {/* Root Route: signed-out -> /signin; signed-in -> /chats or /choose-username */}
         <Route path="/" element={<RootRoute user={user} loading={loading} />} />
