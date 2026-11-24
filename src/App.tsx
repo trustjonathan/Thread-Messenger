@@ -18,6 +18,7 @@ import NewChatPage from './features/chat/NewChatPage';
 import NewGroupPage from './features/chat/NewGroupPage';
 import ChatPage from './features/chat/ChatPage';
 import SettingsPage from './features/settings/SettingsPage';
+import AvatarPage from './features/settings/AvatarPage';
 import PrivacyPage from './features/legal/PrivacyPage';
 import TermsPage from './features/legal/TermsPage';
 
@@ -279,6 +280,14 @@ export function App() {
         />
 
         {/* Settings */}
+        <Route
+          path="/settings/avatar"
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <AvatarPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/settings"
           element={

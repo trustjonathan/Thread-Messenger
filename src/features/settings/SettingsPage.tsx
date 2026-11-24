@@ -7,7 +7,6 @@ import {
   signOut,
   updateDisplayName,
   listBlockedUsers,
-  updateAvatarSeed,
 } from '@/lib/apiClient';
 import { IdenticonAvatar } from '@/features/chat/components/IdenticonAvatar';
 import type { BlockedUser } from '@/types/api';
@@ -34,7 +33,7 @@ export default function SettingsPage() {
   const [displayNameDraft, setDisplayNameDraft] = useState('');
   const [copied, setCopied] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
-  const [saveError, setSaveError] = useState('');
+  const [saveError, setSaveError] = useState<string>('');
 
   // ── Blocked users state ──────────────────────────────────────────
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
@@ -58,7 +57,7 @@ export default function SettingsPage() {
       setUsername(res.data.username);
       setDisplayName(res.data.displayName);
       setDisplayNameDraft(res.data.displayName);
-      setAvatarSeed(res.data.avatarSeed || res.data.id);
+      setAvatarSeed(res.data.avatarSeed ?? '');
       setPageState('ready');
       loadBlocked();
     } catch {
@@ -185,11 +184,20 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold tracking-tight py-4">Settings</h1>
 
         <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Avatar</h2>
-          <div className="flex items-center gap-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+            Avatar
+          </h2>
+          <div className="flex items-center gap-4">
             <IdenticonAvatar seed={avatarSeed || username} label={displayName || username} size={48} />
-            <input value={avatarSeed} onChange={(e) => setAvatarSeed(e.target.value)} maxLength={64} className="flex-1 p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" />
-            <button type="button" onClick={async () => { await updateAvatarSeed(avatarSeed || username); }} className="px-3 rounded-xl bg-indigo-600 text-white min-h-[44px]">Save</button>
+            <div>
+              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{username}</p>
+              <Link
+                to="/settings/avatar"
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium min-h-[44px] inline-flex items-center"
+              >
+                Change avatar <ChevronRight className="w-3 h-3 ml-1" aria-hidden="true" />
+              </Link>
+            </div>
           </div>
         </section>
 
