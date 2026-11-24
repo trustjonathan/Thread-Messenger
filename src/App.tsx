@@ -22,6 +22,9 @@ import AvatarPage from './features/settings/AvatarPage';
 import PrivacyPage from './features/legal/PrivacyPage';
 import TermsPage from './features/legal/TermsPage';
 
+// Context
+import { AvatarOverrideProvider } from '@/lib/avatarOverride';
+
 // PWA Components
 import InstallPrompt from './pwa/InstallPrompt';
 import OfflineBanner from './pwa/OfflineBanner';
@@ -216,11 +219,12 @@ export function App() {
   }, [user, triggerUpdateLastSeen]);
 
   return (
-    <BrowserRouter>
-      <OfflineBanner />
-      <UpdateBanner />
-      <NotificationPrompt />
-      <Routes>
+    <AvatarOverrideProvider>
+      <BrowserRouter>
+        <OfflineBanner />
+        <UpdateBanner />
+        <NotificationPrompt />
+        <Routes>
         {/* Root Route: signed-out -> /signin; signed-in -> /chats or /choose-username */}
         <Route path="/" element={<RootRoute user={user} loading={loading} />} />
 
@@ -316,6 +320,7 @@ export function App() {
       </Routes>
       <InstallPrompt />
     </BrowserRouter>
+    </AvatarOverrideProvider>
   );
 }
 

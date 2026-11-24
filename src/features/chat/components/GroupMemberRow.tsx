@@ -13,7 +13,7 @@ export function GroupMemberRow({ member, currentUserId, isCreator, onRemove, onO
   return (
     <div className="flex items-center gap-3 py-2.5">
       <button type="button" onClick={() => onOpen(member.userId)} className="flex items-center gap-3 flex-1 min-w-0 text-left min-h-[44px]">
-      <IdenticonAvatar seed={member.userId} label={member.displayName || member.username} size={36} />
+      <IdenticonAvatar seed={member.userId} label={member.displayName || member.username} size={36} userId={member.userId} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium truncate">{member.displayName || member.username}</span>

@@ -489,6 +489,7 @@ export async function setTyping(): Promise<ApiResult<void>> {
   return { data: undefined, error: null };
 }
 export async function updateAvatarSeed(): Promise<ApiResult<string>> { return { data: '', error: null }; }
+export function subscribeToProfileChanges(): () => void { return () => {}; }
 export async function updateGroupDescription(): Promise<ApiResult<string>> {
   return { data: '', error: null };
 }
@@ -530,6 +531,7 @@ const _mockSurface = {
   setTyping,
   updateGroupDescription,
   updateAvatarSeed,
+  subscribeToProfileChanges,
 } satisfies typeof RealApi;
 
 void _mockSurface;

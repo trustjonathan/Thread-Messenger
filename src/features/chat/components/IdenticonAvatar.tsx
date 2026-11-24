@@ -1,6 +1,9 @@
+import { useAvatarSeedOverride } from '@/lib/avatarOverride';
+
 interface Props {
   seed: string;
   label: string;
+  userId?: string;
   size?: number;
   variant?: 'identicon' | 'initials';
   className?: string;
@@ -32,8 +35,9 @@ function getInitials(label: string): string {
   return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase();
 }
 
-export function IdenticonAvatar({ seed, label, size = 40, variant = 'identicon', className = '' }: Props) {
-  const h = hashSeed(seed || label || 'default');
+export function IdenticonAvatar({ seed, label, userId, size = 40, variant = 'identicon', className = '' }: Props) {
+  const overrideSeed = userId ? useAvatarSeedOverride(userId) : null;
+  const h = hashSeed((overrideSeed ?? seed) || label || 'default');
   const palette = PALETTES[h % PALETTES.length];
   const initials = getInitials(label);
   const cells: Array<{ x: number; y: number }> = [];

@@ -303,6 +303,7 @@ export default function ChatListPage() {
                           seed={conv.otherUser?.avatarSeed ?? conv.otherUser?.username ?? ''}
                           label={username || displayName}
                           size={40}
+                          userId={conv.otherUser?.id ?? undefined}
                         />
                       )}
 

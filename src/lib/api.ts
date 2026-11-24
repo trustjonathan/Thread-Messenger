@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase as defaultClient } from './supabaseClient';
 import type { Database } from '../types/database';
 import type {
@@ -544,6 +544,51 @@ export function subscribeToUserMessages(
 
 const authListeners = new Set<(user: CurrentUser | null) => void>();
 
+// ── Profile change broadcast (cross-client avatar propagation) ─────────────
+const profileChangeListeners = new Set<(userId: string, avatarSeed: string | null) => void>();
+let profileChannel: RealtimeChannel | null = null;
+
+function getProfileChannel(client: SupabaseClient<Database>): RealtimeChannel {
+  if (!profileChannel) {
+    profileChannel = client.channel('profile_changes');
+    profileChannel.subscribe();
+  }
+  return profileChannel;
+}
+
+export function subscribeToProfileChanges(
+  listener: (userId: string, avatarSeed: string | null) => void,
+  client: SupabaseClient<Database> = defaultClient
+): () => void {
+  profileChangeListeners.add(listener);
+  getProfileChannel(client);
+  return () => {
+    profileChangeListeners.delete(listener);
+  };
+}
+
+function broadcastProfileChange(userId: string, avatarSeed: string | null, client: SupabaseClient<Database>): void {
+  try {
+    getProfileChannel(client).send({
+      type: 'broadcast',
+      event: 'avatar_changed',
+      payload: { user_id: userId, avatar_seed: avatarSeed },
+    });
+  } catch {
+    // broadcast best-effort; profile still saved in DB
+  }
+}
+
+function emitProfileChange(userId: string, avatarSeed: string | null): void {
+  for (const listener of profileChangeListeners) {
+    try {
+      listener(userId, avatarSeed);
+    } catch {
+      // ignore
+    }
+  }
+}
+
 async function emitAuthChange(client: SupabaseClient<Database> = defaultClient): Promise<void> {
   const res = await getCurrentUser(client);
   for (const listener of authListeners) {
@@ -1003,6 +1048,11 @@ export async function updateAvatarSeed(
     const { data, error } = await client.rpc('update_avatar_seed', { p_seed: seed });
     if (error) return { data: null, error: mapError(error) };
     emitAuthChange(client);
+    const user = (await getCurrentUser(client)).data;
+    if (user) {
+      broadcastProfileChange(user.id, seed, client);
+      emitProfileChange(user.id, seed);
+    }
     return { data: data as string, error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };
