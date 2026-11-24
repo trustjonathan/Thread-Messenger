@@ -6,6 +6,7 @@ import {
   sendMessage,
   newClientId,
   markRead,
+  setTyping,
   blockUser,
   reportContent,
   subscribeToUserMessages,
@@ -13,6 +14,8 @@ import {
 } from '@/lib/apiClient';
 import type { MessageCursor, ConversationSummary, Message } from '@/types/api';
 import { Avatar } from './components/Avatar';
+import { GroupHeader } from './components/GroupHeader';
+import { GroupSettingsDrawer } from './components/GroupSettingsDrawer';
 import { MessageStatus } from '@/components/chat/MessageStatus';
 import { DateSeparator } from './components/DateSeparator';
 import { ReportModal } from './components/ReportModal';
@@ -53,6 +56,9 @@ export default function ChatPage() {
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
   const [groupTitle, setGroupTitle] = useState<string | null>(null);
   const [memberCount, setMemberCount] = useState(0);
+  const [groupCreatedBy, setGroupCreatedBy] = useState<string | null>(null);
+  const [groupDescription, setGroupDescription] = useState<string | null>(null);
+  const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<MessageCursor | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -70,6 +76,7 @@ export default function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLElement>(null);
   const [composerHeight, setComposerHeight] = useState(64);
+  const lastTypingRef = useRef(0);
 
   // Measure composer height with ResizeObserver
   useEffect(() => {
@@ -154,6 +161,8 @@ export default function ChatPage() {
         if (currentConv?.kind === 'group') {
           setGroupTitle(currentConv.title || 'Group');
           setMemberCount(currentConv.memberCount || 0);
+          setGroupCreatedBy(currentConv.createdBy || null);
+          setGroupDescription(currentConv.description || null);
         }
       }
     } catch {
@@ -472,7 +481,11 @@ export default function ChatPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
 
-          <Avatar name={otherDisplayName} size="sm" />
+          {groupTitle ? (
+            <GroupHeader conversationId={conversationId || ''} title={groupTitle} memberCount={memberCount} onClick={() => setIsGroupSettingsOpen(true)} />
+          ) : (
+            <Avatar name={otherDisplayName} size="sm" />
+          )}
 
           <div className="min-w-0">
             <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
@@ -697,7 +710,7 @@ export default function ChatPage() {
               ref={textareaRef}
               rows={1}
               value={inputBody}
-              onChange={(e) => setInputBody(e.target.value)}
+              onChange={(e) => { setInputBody(e.target.value); if (conversationId && Date.now() - lastTypingRef.current > 3000) { lastTypingRef.current = Date.now(); setTyping(conversationId).catch(() => {}); } }}
               onKeyDown={handleKeyDown}
               maxLength={2000}
               placeholder="Message"
@@ -735,6 +748,18 @@ export default function ChatPage() {
           )}
         </form>
       </footer>
+
+      {isGroupSettingsOpen && groupTitle && (
+        <GroupSettingsDrawer
+          conversationId={conversationId || ''}
+          title={groupTitle}
+          description={groupDescription}
+          createdBy={groupCreatedBy}
+          currentUserId={currentUserId}
+          onClose={() => setIsGroupSettingsOpen(false)}
+          onLeft={() => navigate('/chats')}
+        />
+      )}
 
       {/* Modals */}
       <ReportModal

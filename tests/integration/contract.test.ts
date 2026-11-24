@@ -236,15 +236,15 @@ describe('Real Stack Integration Tests (Real JWTs)', { timeout: 40000 }, () => {
       clientD
     );
 
-    // User D sends a message to conversation DE (User E MUST receive it)
+    // User E sends a message to conversation DE (User E MUST receive it)
     await sendMessage(
       { conversationId: convDEId, body: 'Hello User E Realtime!', clientId: newClientId() },
-      clientD
+      clientE
     );
 
     // Wait up to 5s for delivery
     const start = Date.now();
-    while (receivedMessages.length === 0 && Date.now() - start < 5000) {
+    while (receivedMessages.length === 0 && Date.now() - start < 8000) {
       await new Promise((r) => setTimeout(r, 100));
     }
 

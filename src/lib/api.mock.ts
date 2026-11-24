@@ -181,6 +181,8 @@ export async function listConversations(): Promise<ApiResult<ConversationSummary
       createdAt: c.createdAt,
       kind: 'direct',
       title: null,
+      description: null,
+      createdBy: null,
       otherUser: c.otherUser,
       memberCount: 2,
       lastMessage: lastMsg
@@ -476,6 +478,18 @@ export async function deleteGroup(): Promise<ApiResult<void>> {
 export async function listGroupMembers(): Promise<ApiResult<import('../types/api').GroupMember[]>> {
   return { data: [], error: null };
 }
+export async function searchUsersByPrefix(): Promise<ApiResult<import('../types/api').UserProfilePreview[]>> {
+  return { data: [], error: null };
+}
+export async function searchMessages(): Promise<ApiResult<Array<{ conversationId: string; messageId: string; body: string; createdAt: string }>>> {
+  return { data: [], error: null };
+}
+export async function setTyping(): Promise<ApiResult<void>> {
+  return { data: undefined, error: null };
+}
+export async function updateGroupDescription(): Promise<ApiResult<string>> {
+  return { data: '', error: null };
+}
 
 // ---------------------------------------------------------------------------
 // Compile-time surface parity guard.
@@ -509,6 +523,10 @@ const _mockSurface = {
   leaveGroup,
   deleteGroup,
   listGroupMembers,
+  searchUsersByPrefix,
+  searchMessages,
+  setTyping,
+  updateGroupDescription,
 } satisfies typeof RealApi;
 
 void _mockSurface;

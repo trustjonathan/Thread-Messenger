@@ -4,9 +4,11 @@ import {
   listConversations,
   subscribeToUserMessages,
   getCurrentUser,
+  searchMessages,
 } from '@/lib/apiClient';
 import type { ConversationSummary } from '@/types/api';
 import { Avatar } from './components/Avatar';
+import { IdenticonAvatar } from './components/IdenticonAvatar';
 import { getHumanErrorMessage } from './components/ErrorMessage';
 import { Plus, Copy, Check, RefreshCw, MessageSquare, AlertCircle, MoreVertical, Settings, Shield, FileText } from 'lucide-react';
 
@@ -19,6 +21,15 @@ export default function ChatListPage() {
   const [copied, setCopied] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [messageResults, setMessageResults] = useState<Array<{ conversationId: string; messageId: string; body: string; createdAt: string }>>([]);
+
+  useEffect(() => {
+    let active = true;
+    if (search.trim().length < 2) { setMessageResults([]); return; }
+    searchMessages(search.trim()).then((res) => { if (active) setMessageResults(res.data || []); });
+    return () => { active = false; };
+  }, [search]);
 
   const fetchConversations = useCallback(async (isBackground = false) => {
     if (!isBackground) setIsRefreshing(true);
@@ -183,6 +194,17 @@ export default function ChatListPage() {
           </div>
         </header>
 
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search chats and messages" className="mt-4 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" />
+        {messageResults.length > 0 && (
+          <div className="mt-2 rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+            {messageResults.slice(0, 10).map((r) => (
+              <button key={r.messageId} type="button" onClick={() => navigate(`/chats/${r.conversationId}`)} className="w-full text-left p-3 min-h-[44px]">
+                <span className="text-sm line-clamp-2">{r.body}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Error notification */}
         {errorCode && (
           <div
@@ -220,7 +242,7 @@ export default function ChatListPage() {
                 </div>
               ))}
             </div>
-          ) : conversations.length === 0 ? (
+          ) : conversations.filter((c) => (c.kind === 'group' ? (c.title || '').toLowerCase().includes(search.toLowerCase()) : (c.otherUser?.displayName || c.otherUser?.username || '').toLowerCase().includes(search.toLowerCase()))).length === 0 ? (
             /* Empty state */
             <div className="flex flex-col items-center justify-center p-8 text-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 my-8">
               <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-3">
@@ -243,7 +265,7 @@ export default function ChatListPage() {
               role="list"
               aria-label="Direct conversations"
             >
-              {conversations.map((conv) => {
+              {conversations.filter((c) => (c.kind === 'group' ? (c.title || '').toLowerCase().includes(search.toLowerCase()) : (c.otherUser?.displayName || c.otherUser?.username || '').toLowerCase().includes(search.toLowerCase()))).map((conv) => {
                 const displayName = conv.kind === 'group' ? (conv.title || 'Group') : (conv.otherUser?.displayName || conv.otherUser?.username || 'Unknown');
                 const username = conv.kind === 'group' ? null : conv.otherUser?.username;
                 const lastMessage = conv.lastMessage;
@@ -257,7 +279,11 @@ export default function ChatListPage() {
                       onClick={() => navigate(`/chats/${conv.conversationId}`)}
                       className="w-full p-4 rounded-2xl bg-white dark:bg-slate-900 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-800 transition-colors flex items-center gap-3 text-left min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
-                      <Avatar name={displayName} size="md" />
+                      {conv.kind === 'group' ? (
+                        <IdenticonAvatar seed={conv.conversationId} label={displayName} size={40} variant="initials" />
+                      ) : (
+                        <Avatar name={displayName} size="md" />
+                      )}
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-baseline justify-between gap-2">

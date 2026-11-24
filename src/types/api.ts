@@ -40,6 +40,8 @@ export interface ConversationSummary {
   createdAt: string;
   kind: 'direct' | 'group';
   title: string | null;
+  description: string | null;
+  createdBy: string | null;
   otherUser: UserProfilePreview | null;
   memberCount: number;
   lastMessage: {
@@ -66,6 +68,7 @@ export interface GroupMember {
   displayName: string;
   role: 'admin' | 'member';
   joinedAt: string;
+  lastReadAt: string;
 }
 
 export interface MessageCursor {

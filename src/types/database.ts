@@ -282,6 +282,8 @@ export type Database = {
           created_at: string
           kind: string
           title: string | null
+          description: string | null
+          created_by: string | null
           last_message_body: string
           last_message_created_at: string
           last_message_id: string
@@ -299,8 +301,18 @@ export type Database = {
       leave_group: { Args: { p_conversation_id: string }; Returns: undefined }
       list_group_members: {
         Args: { p_conversation_id: string }
-        Returns: { user_id: string; username: string; display_name: string; role: string; joined_at: string }[]
+        Returns: { user_id: string; username: string; display_name: string; role: string; joined_at: string; last_read_at: string }[]
       }
+      search_users_by_prefix: {
+        Args: { p_query: string }
+        Returns: { id: string; username: string; display_name: string }[]
+      }
+      search_messages: {
+        Args: { p_query: string }
+        Returns: { conversation_id: string; message_id: string; body: string; created_at: string }[]
+      }
+      set_typing: { Args: { p_conversation_id: string }; Returns: undefined }
+      update_group_description: { Args: { p_conversation_id: string; p_description: string }; Returns: string }
       remove_group_member: { Args: { p_conversation_id: string; p_user_id: string }; Returns: undefined }
       rename_group: { Args: { p_conversation_id: string; p_title: string }; Returns: string }
       mark_read: { Args: { p_conversation_id: string }; Returns: undefined }

@@ -204,6 +204,8 @@ export async function listConversations(
       createdAt: row.created_at,
       kind: row.kind === 'group' ? 'group' : 'direct',
       title: row.title ?? null,
+      description: row.description ?? null,
+      createdBy: row.created_by ?? null,
       otherUser: row.other_user_id
         ? {
             id: row.other_user_id,
@@ -916,8 +918,76 @@ export async function listGroupMembers(
       displayName: r.display_name,
       role: r.role === 'admin' ? 'admin' : 'member',
       joinedAt: r.joined_at,
+      lastReadAt: r.last_read_at,
     }));
     return { data: members, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function searchUsersByPrefix(
+  query: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<UserProfilePreview[]>> {
+  try {
+    const { data, error } = await client.rpc('search_users_by_prefix', { p_query: query });
+    if (error) return { data: null, error: mapError(error) };
+    return {
+      data: (data || []).map((r) => ({ id: r.id, username: r.username, displayName: r.display_name })),
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function searchMessages(
+  query: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<Array<{ conversationId: string; messageId: string; body: string; createdAt: string }>>> {
+  try {
+    const { data, error } = await client.rpc('search_messages', { p_query: query });
+    if (error) return { data: null, error: mapError(error) };
+    return {
+      data: (data || []).map((r) => ({
+        conversationId: r.conversation_id,
+        messageId: r.message_id,
+        body: r.body,
+        createdAt: r.created_at,
+      })),
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function setTyping(
+  conversationId: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await client.rpc('set_typing', { p_conversation_id: conversationId });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: undefined, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function updateGroupDescription(
+  conversationId: string,
+  description: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<string>> {
+  try {
+    const { data, error } = await client.rpc('update_group_description', {
+      p_conversation_id: conversationId,
+      p_description: description,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: (data as string) ?? '', error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };
   }
