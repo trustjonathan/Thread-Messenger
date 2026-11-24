@@ -97,7 +97,7 @@ describe('pickActiveUpdate', () => {
 
 describe('getActiveUpdate', () => {
   it('returns null when no configured window is active', () => {
-    expect(getActiveUpdate()).toBeNull();
+    expect(getActiveUpdate('2026-12-01T00:00:00Z')).toBeNull();
   });
 });
 
