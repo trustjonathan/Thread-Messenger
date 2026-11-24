@@ -152,6 +152,7 @@ export default function ChatListPage() {
               </button>
               {isMenuOpen && (
                 <div className="absolute right-0 mt-2 w-48 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg py-1.5 z-20">
+                  <Link to="/chats/new-group" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px]"><Plus className="w-4 h-4" /> New group</Link>
                   <Link to="/settings" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px]"><Settings className="w-4 h-4" /> Settings</Link>
                   <Link to="/privacy" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px]"><Shield className="w-4 h-4" /> Privacy</Link>
                   <Link to="/terms" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px]"><FileText className="w-4 h-4" /> Terms</Link>
@@ -243,8 +244,8 @@ export default function ChatListPage() {
               aria-label="Direct conversations"
             >
               {conversations.map((conv) => {
-                const displayName = conv.otherUser?.displayName || conv.otherUser?.username || 'Unknown';
-                const username = conv.otherUser?.username;
+                const displayName = conv.kind === 'group' ? (conv.title || 'Group') : (conv.otherUser?.displayName || conv.otherUser?.username || 'Unknown');
+                const username = conv.kind === 'group' ? null : conv.otherUser?.username;
                 const lastMessage = conv.lastMessage;
                 const unreadCount = conv.unreadCount || 0;
                 const badgeText = unreadCount >= 100 ? '99+' : unreadCount.toString();

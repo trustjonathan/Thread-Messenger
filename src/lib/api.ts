@@ -7,6 +7,7 @@ import type {
   BlockedUser,
   ConversationSummary,
   CurrentUser,
+  GroupMember,
   Message,
   MessageCursor,
   PaginatedMessages,
@@ -201,11 +202,16 @@ export async function listConversations(
     const summaries: ConversationSummary[] = (data || []).map((row) => ({
       conversationId: row.conversation_id,
       createdAt: row.created_at,
-      otherUser: {
-        id: row.other_user_id,
-        username: row.other_username,
-        displayName: row.other_display_name,
-      },
+      kind: row.kind === 'group' ? 'group' : 'direct',
+      title: row.title ?? null,
+      otherUser: row.other_user_id
+        ? {
+            id: row.other_user_id,
+            username: row.other_username ?? '',
+            displayName: row.other_display_name ?? '',
+          }
+        : null,
+      memberCount: Number(row.member_count ?? 0),
       lastMessage: row.last_message_id
         ? {
             id: row.last_message_id,
@@ -792,6 +798,126 @@ export async function listBlockedUsers(
     }
 
     return { data: blocked, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function createGroup(
+  title: string,
+  memberUsernames: string[],
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<string>> {
+  try {
+    const { data, error } = await client.rpc('create_group', {
+      p_title: title,
+      p_member_usernames: memberUsernames,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: data as string, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function addGroupMembers(
+  conversationId: string,
+  usernames: string[],
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<number>> {
+  try {
+    const { data, error } = await client.rpc('add_group_members', {
+      p_conversation_id: conversationId,
+      p_usernames: usernames,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: Number(data ?? 0), error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function removeGroupMember(
+  conversationId: string,
+  userId: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await client.rpc('remove_group_member', {
+      p_conversation_id: conversationId,
+      p_user_id: userId,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: undefined, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function renameGroup(
+  conversationId: string,
+  title: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<string>> {
+  try {
+    const { data, error } = await client.rpc('rename_group', {
+      p_conversation_id: conversationId,
+      p_title: title,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: data as string, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function leaveGroup(
+  conversationId: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await client.rpc('leave_group', {
+      p_conversation_id: conversationId,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: undefined, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function deleteGroup(
+  conversationId: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await client.rpc('delete_group', {
+      p_conversation_id: conversationId,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: undefined, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function listGroupMembers(
+  conversationId: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<GroupMember[]>> {
+  try {
+    const { data, error } = await client.rpc('list_group_members', {
+      p_conversation_id: conversationId,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    const members: GroupMember[] = (data || []).map((r) => ({
+      userId: r.user_id,
+      username: r.username,
+      displayName: r.display_name,
+      role: r.role === 'admin' ? 'admin' : 'member',
+      joinedAt: r.joined_at,
+    }));
+    return { data: members, error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };
   }

@@ -9,6 +9,8 @@ import {
   unblockUser,
   subscribeToUserMessages,
   newClientId,
+  createGroup,
+  listGroupMembers,
 } from '../../src/lib/api';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../../src/types/database';
@@ -250,5 +252,26 @@ describe('Real Stack Integration Tests (Real JWTs)', { timeout: 40000 }, () => {
 
     expect(receivedMessages).toContain('Hello User E Realtime!');
     expect(receivedMessages).not.toContain('Secret message for User C');
+  });
+
+  it('group create/send/receive works for members', async () => {
+    const createRes = await createGroup(`Group ${Date.now()}`, [usernameB], clientA);
+    expect(createRes.error).toBeNull();
+    const conversationId = createRes.data!;
+    expect(conversationId).toBeTruthy();
+
+    const membersRes = await listGroupMembers(conversationId, clientA);
+    expect(membersRes.error).toBeNull();
+    expect(membersRes.data?.length).toBe(2);
+
+    const sendRes = await sendMessage(
+      { conversationId, body: 'Group hello', clientId: newClientId() },
+      clientB
+    );
+    expect(sendRes.error).toBeNull();
+
+    const loadRes = await loadMessages({ conversationId, limit: 10 }, clientA);
+    expect(loadRes.error).toBeNull();
+    expect(loadRes.data?.messages.some((m) => m.body === 'Group hello')).toBe(true);
   });
 });

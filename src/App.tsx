@@ -15,6 +15,7 @@ import SignInPage from './features/auth/SignInPage';
 import ChooseUsernamePage from './features/auth/ChooseUsernamePage';
 import ChatListPage from './features/chat/ChatListPage';
 import NewChatPage from './features/chat/NewChatPage';
+import NewGroupPage from './features/chat/NewGroupPage';
 import ChatPage from './features/chat/ChatPage';
 import SettingsPage from './features/settings/SettingsPage';
 import PrivacyPage from './features/legal/PrivacyPage';
@@ -257,6 +258,14 @@ export function App() {
           element={
             <ProtectedRoute user={user} loading={loading}>
               <NewChatPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chats/new-group"
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <NewGroupPage />
             </ProtectedRoute>
           }
         />

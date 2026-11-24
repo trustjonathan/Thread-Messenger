@@ -38,7 +38,10 @@ export type BlockedUser = UserProfilePreview;
 export interface ConversationSummary {
   conversationId: string;
   createdAt: string;
-  otherUser: UserProfilePreview;
+  kind: 'direct' | 'group';
+  title: string | null;
+  otherUser: UserProfilePreview | null;
+  memberCount: number;
   lastMessage: {
     id: string;
     body: string; // Truncated to 100 characters max
@@ -55,6 +58,14 @@ export interface Message {
   clientId: string;
   body: string;
   createdAt: string;
+}
+
+export interface GroupMember {
+  userId: string;
+  username: string;
+  displayName: string;
+  role: 'admin' | 'member';
+  joinedAt: string;
 }
 
 export interface MessageCursor {

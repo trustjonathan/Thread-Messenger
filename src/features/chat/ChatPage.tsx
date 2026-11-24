@@ -51,6 +51,8 @@ export default function ChatPage() {
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
+  const [groupTitle, setGroupTitle] = useState<string | null>(null);
+  const [memberCount, setMemberCount] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<MessageCursor | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -148,6 +150,10 @@ export default function ChatPage() {
         );
         if (currentConv?.otherUser) {
           setOtherUser(currentConv.otherUser);
+        }
+        if (currentConv?.kind === 'group') {
+          setGroupTitle(currentConv.title || 'Group');
+          setMemberCount(currentConv.memberCount || 0);
         }
       }
     } catch {
@@ -448,7 +454,7 @@ export default function ChatPage() {
     navigate('/chats');
   };
 
-  const otherDisplayName = otherUser?.displayName || otherUser?.username || 'Chat';
+  const otherDisplayName = groupTitle || otherUser?.displayName || otherUser?.username || 'Chat';
   const otherUsername = otherUser?.username;
   const charCount = inputBody.length;
   const isSendDisabled = inputBody.trim().length === 0 || charCount > 2000;
@@ -472,9 +478,14 @@ export default function ChatPage() {
             <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
               {otherDisplayName}
             </h1>
-            {otherUsername && (
+            {!groupTitle && otherUsername && (
               <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                 @{otherUsername}
+              </p>
+            )}
+            {groupTitle && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                {memberCount} members
               </p>
             )}
           </div>
