@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { X, Plus, Trash2, LogOut, AlertTriangle } from 'lucide-react';
 import { searchUsersByPrefix, getOrCreateDirectConversation } from '@/lib/apiClient';
 import { useNavigate } from 'react-router-dom';
@@ -27,7 +27,13 @@ export function GroupSettingsDrawer({ conversationId, title, description, create
   const [desc, setDesc] = useState(description || '');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserProfilePreview[]>([]);
-  const [confirm, setConfirm] = useState<{ type: 'remove' | 'leave' | 'delete'; userId?: string; label?: string } | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const addMemberFocus = useCallback(() => {
+    searchRef.current?.focus();
+  }, []);
+
+  const [confirm, setConfirm] = useState<{ type: 'remove' | 'leave' | 'delete' | 'block'; userId?: string; label?: string } | null>(null);
 
   const search = async (q: string) => {
     setQuery(q);
@@ -42,8 +48,9 @@ export function GroupSettingsDrawer({ conversationId, title, description, create
     if (confirm.type === 'remove' && confirm.userId) ok = await remove(confirm.userId);
     if (confirm.type === 'leave') ok = await leave();
     if (confirm.type === 'delete') ok = await removeGroup();
+    if (confirm.type === 'block') ok = await leave();
     setConfirm(null);
-    if (ok && (confirm.type === 'leave' || confirm.type === 'delete')) onLeft();
+    if (ok && (confirm.type === 'leave' || confirm.type === 'delete' || confirm.type === 'block')) onLeft();
   };
 
   return (
@@ -89,7 +96,7 @@ export function GroupSettingsDrawer({ conversationId, title, description, create
         {isCreator && members.length < 20 && (
           <div className="space-y-2">
             <div className="flex gap-2">
-              <input value={query} onChange={(e) => search(e.target.value)} placeholder="Search username" className="flex-1 p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" />
+              <input ref={searchRef} value={query} onChange={(e) => search(e.target.value)} placeholder="Search username" className="flex-1 p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" />
             </div>
             {results.length > 0 && (
               <div className="border border-slate-200 dark:border-slate-800 rounded-xl divide-y divide-slate-100 dark:divide-slate-800">
@@ -121,7 +128,7 @@ export function GroupSettingsDrawer({ conversationId, title, description, create
         {confirm && (
           <div className="p-3 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 space-y-2">
             <p className="text-sm text-red-700 dark:text-red-300">
-              {confirm.type === 'remove' ? `Remove @${confirm.label}?` : confirm.type === 'leave' ? 'Leave this group?' : 'Delete group for everyone?'}
+              {confirm.type === 'remove' ? `Remove @${confirm.label}?` : confirm.type === 'leave' ? 'Leave this group?' : confirm.type === 'block' ? 'Block this group?' : 'Delete group for everyone?'}
             </p>
             <div className="flex gap-2">
               <button type="button" onClick={doConfirm} className="px-3 rounded-xl bg-red-600 text-white min-h-[44px]">Confirm</button>
@@ -132,9 +139,17 @@ export function GroupSettingsDrawer({ conversationId, title, description, create
 
         <div className="pt-2 flex flex-col gap-2">
           {isCreator ? (
-            <button type="button" onClick={() => setConfirm({ type: 'delete' })} className="flex items-center gap-2 text-red-600 dark:text-red-400 min-h-[44px]">
-              <Trash2 className="w-4 h-4" /> Delete group
-            </button>
+            <>
+              <button type="button" onClick={() => setConfirm({ type: 'block' })} className="flex items-center gap-2 text-red-600 dark:text-red-400 min-h-[44px]">
+                <AlertTriangle className="w-4 h-4" /> Block group
+              </button>
+              <button type="button" onClick={addMemberFocus} disabled={members.length >= 20} className={`flex items-center gap-2 min-h-[44px] ${members.length >= 20 ? 'opacity-50 cursor-not-allowed' : 'text-indigo-600 dark:text-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                <Plus className="w-4 h-4" /> Add member
+              </button>
+              <button type="button" onClick={() => setConfirm({ type: 'delete' })} className="flex items-center gap-2 text-red-600 dark:text-red-400 min-h-[44px]">
+                <Trash2 className="w-4 h-4" /> Delete group
+              </button>
+            </>
           ) : (
             <button type="button" onClick={() => setConfirm({ type: 'leave' })} className="flex items-center gap-2 text-red-600 dark:text-red-400 min-h-[44px]">
               <LogOut className="w-4 h-4" /> Leave group
