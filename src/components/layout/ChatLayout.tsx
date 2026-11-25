@@ -13,6 +13,7 @@ import { AiChat } from './AiChat';
 import { NewChatContent } from '@/features/chat/NewChatPage';
 import { useIsDesktop } from '@/hooks/useMediaQuery';
 import { useResizableSidebar } from '@/hooks/useResizableSidebar';
+import { InviteFriendsModal } from '@/features/chat/components/InviteFriendsModal';
 
 export default function ChatLayout() {
   const ts = () => new Date().toISOString().split('T')[1].split('.')[0];
@@ -32,6 +33,7 @@ export default function ChatLayout() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   const chatIdRef = useRef(chatId);
   chatIdRef.current = chatId;
@@ -246,7 +248,7 @@ export default function ChatLayout() {
               onBack={() => navigate('/chats')}
             />
           ) : !chatId && isDesktop ? (
-            <EmptyState />
+            <EmptyState onInviteClick={() => setIsInviteModalOpen(true)} />
           ) : chatId ? (
             <ChatPane
               chatId={chatId}
@@ -264,6 +266,11 @@ export default function ChatLayout() {
           )}
         </main>
       )}
+
+      <InviteFriendsModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+      />
     </div>
   );
 }

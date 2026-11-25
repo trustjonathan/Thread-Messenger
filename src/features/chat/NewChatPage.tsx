@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   searchUserByUsername,
   getOrCreateDirectConversation,
@@ -7,6 +7,7 @@ import {
 import { Avatar } from './components/Avatar';
 import { getHumanErrorMessage } from './components/ErrorMessage';
 import { ArrowLeft, Search, UserX, Copy, Check, MessageSquare, AlertCircle, RefreshCw } from 'lucide-react';
+import { InviteFriendsModal } from './components/InviteFriendsModal';
 
 interface UserPreview {
   id: string;
@@ -28,13 +29,35 @@ interface NewChatContentProps {
  * and the desktop right-pane embed.
  */
 export function NewChatContent({ onNavigate, onBack, pane = false }: NewChatContentProps) {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams] = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('username') || '');
   const [isSearching, setIsSearching] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [foundUser, setFoundUser] = useState<UserPreview | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+
+  // Auto-search if username parameter is supplied (e.g. from invite redemption)
+  useEffect(() => {
+    const paramUser = searchParams.get('username');
+    if (paramUser && paramUser.trim()) {
+      const clean = paramUser.trim().toLowerCase();
+      setSearchTerm(clean);
+      setIsSearching(true);
+      searchUserByUsername(clean).then((res) => {
+        setIsSearching(false);
+        if (res?.data) {
+          setFoundUser(res.data);
+        } else {
+          setNotFound(true);
+        }
+      }).catch(() => {
+        setIsSearching(false);
+        setErrorCode('OPERATION_FAILED');
+      });
+    }
+  }, [searchParams]);
 
   const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -232,24 +255,20 @@ export function NewChatContent({ onNavigate, onBack, pane = false }: NewChatCont
 
             <button
               type="button"
-              onClick={handleCopyInviteLink}
+              onClick={() => setIsInviteModalOpen(true)}
               className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl min-h-[44px] transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              {copiedLink ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="text-emerald-600 font-semibold">Link copied!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy invite link</span>
-                </>
-              )}
+              <Copy className="w-3.5 h-3.5" />
+              <span>Invite friends to Thread</span>
             </button>
           </div>
         )}
       </div>
+
+      <InviteFriendsModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+      />
     </div>
   );
 

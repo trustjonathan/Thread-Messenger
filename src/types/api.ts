@@ -10,7 +10,8 @@ export type ApiErrorCode =
   | 'NETWORK_ERROR'
   | 'UNKNOWN_ERROR'
   | 'GROUP_FULL'
-  | 'NOT_ALLOWED';
+  | 'NOT_ALLOWED'
+  | 'INVALID_INVITE';
 
 export interface ApiError {
   code: ApiErrorCode;
@@ -105,3 +106,10 @@ export interface AiChatResponse {
   reply: string;
   quota: AiQuota | null;
 }
+
+export interface ResolvedInvite {
+  username: string;
+  displayName: string;
+  avatarSeed?: string | null;
+}
+

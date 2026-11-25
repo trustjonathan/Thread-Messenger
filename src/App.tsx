@@ -7,6 +7,7 @@ import {
   useLocation,
 } from 'react-router-dom';
 import { onAuthChange, updateLastSeen } from '@/lib/apiClient';
+import { getPendingInviteCode } from '@/lib/inviteStorage';
 import type { CurrentUser } from '@/types/api';
 
 // Pages
@@ -19,6 +20,7 @@ import SettingsPage from './features/settings/SettingsPage';
 import AvatarPage from './features/settings/AvatarPage';
 import PrivacyPage from './features/legal/PrivacyPage';
 import TermsPage from './features/legal/TermsPage';
+import InviteLandingPage from './features/invite/InviteLandingPage';
 
 // Context
 import { AvatarOverrideProvider } from '@/lib/avatarOverride';
@@ -62,6 +64,11 @@ function RootRoute({
 
   if (!user.usernameSet) {
     return <Navigate to="/choose-username" replace />;
+  }
+
+  const pendingInvite = getPendingInviteCode();
+  if (pendingInvite) {
+    return <Navigate to={`/invite/${encodeURIComponent(pendingInvite)}`} replace />;
   }
 
   return <Navigate to="/chats" replace />;
@@ -119,6 +126,10 @@ function GuestRoute({
   if (user) {
     if (!user.usernameSet) {
       return <Navigate to="/choose-username" replace />;
+    }
+    const pendingInvite = getPendingInviteCode();
+    if (pendingInvite) {
+      return <Navigate to={`/invite/${encodeURIComponent(pendingInvite)}`} replace />;
     }
     return <Navigate to="/chats" replace />;
   }
@@ -225,6 +236,9 @@ export function App() {
         <Routes>
         {/* Root Route: signed-out -> /signin; signed-in -> /chats or /choose-username */}
         <Route path="/" element={<RootRoute user={user} loading={loading} />} />
+
+        {/* Invite link landing route */}
+        <Route path="/invite/:code" element={<InviteLandingPage />} />
 
         {/* Public Landing Page */}
         <Route path="/landing" element={<LandingPage />} />

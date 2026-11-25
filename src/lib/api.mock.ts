@@ -11,6 +11,7 @@ import type {
   MessageCursor,
   PaginatedMessages,
   UserProfilePreview,
+  ResolvedInvite,
 } from '../types/api';
 import { mapError, newClientId } from './api';
 import type * as RealApi from './api';
@@ -36,6 +37,7 @@ interface MockStore {
   }[];
   messages: Message[];
   blocks: Set<string>;
+  inviteCodes: Map<string, string>;
 }
 
 const mockStore: MockStore = {
@@ -101,6 +103,10 @@ const mockStore: MockStore = {
     },
   ],
   blocks: new Set<string>(),
+  inviteCodes: new Map<string, string>([
+    ['11111111-1111-1111-1111-111111111111', 'mockcode1234'],
+    ['22222222-2222-2222-2222-222222222222', 'alicecode5678'],
+  ]),
 };
 
 export async function searchUserByUsername(
@@ -346,6 +352,70 @@ export function subscribeToUserMessages(
   return () => {
     clearInterval(intervalId);
   };
+}
+
+
+export async function getMyInviteCode(): Promise<ApiResult<string>> {
+  await simulateLatency();
+  const uid = mockStore.currentUserId;
+  let code = mockStore.inviteCodes.get(uid);
+  if (!code) {
+    code = 'mockcode' + Math.random().toString(36).substring(2, 8);
+    mockStore.inviteCodes.set(uid, code);
+  }
+  return { data: code, error: null };
+}
+
+export async function regenerateInviteCode(): Promise<ApiResult<string>> {
+  await simulateLatency();
+  const uid = mockStore.currentUserId;
+  const newCode = 'regen' + Math.random().toString(36).substring(2, 9);
+  mockStore.inviteCodes.set(uid, newCode);
+  return { data: newCode, error: null };
+}
+
+export async function resolveInvite(code: string): Promise<ApiResult<ResolvedInvite>> {
+  await simulateLatency();
+  const clean = code.trim();
+  for (const [uid, userCode] of mockStore.inviteCodes.entries()) {
+    if (userCode === clean) {
+      const user = mockStore.users.find((u) => u.id === uid);
+      if (user) {
+        return {
+          data: {
+            username: user.username,
+            displayName: user.displayName,
+            avatarSeed: user.avatarSeed ?? null,
+          },
+          error: null,
+        };
+      }
+    }
+  }
+  return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
+}
+
+export async function redeemInvite(code: string): Promise<ApiResult<string>> {
+  await simulateLatency();
+  const clean = code.trim();
+  const callerId = mockStore.currentUserId;
+  for (const [uid, userCode] of mockStore.inviteCodes.entries()) {
+    if (userCode === clean) {
+      if (uid === callerId) {
+        return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
+      }
+      const pair1 = callerId + ':' + uid;
+      const pair2 = uid + ':' + callerId;
+      if (mockStore.blocks.has(pair1) || mockStore.blocks.has(pair2)) {
+        return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
+      }
+      const user = mockStore.users.find((u) => u.id === uid);
+      if (user) {
+        return { data: user.username, error: null };
+      }
+    }
+  }
+  return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
 }
 
 // ---------------------------------------------------------------------------
@@ -605,6 +675,10 @@ const _mockSurface = {
   getAiQuota,
   sendAiPrompt,
   streamAiPrompt,
+  getMyInviteCode,
+  regenerateInviteCode,
+  resolveInvite,
+  redeemInvite,
 } satisfies typeof RealApi;
 
 void _mockSurface;

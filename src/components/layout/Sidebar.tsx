@@ -10,7 +10,9 @@ import {
   FileText,
   MessageSquarePlus,
   Sparkles,
+  UserPlus,
 } from 'lucide-react';
+import { InviteFriendsModal } from '@/features/chat/components/InviteFriendsModal';
 import { markRead } from '@/lib/apiClient';
 import type { ConversationSummary, CurrentUser } from '@/types/api';
 import { IdenticonAvatar } from '@/features/chat/components/IdenticonAvatar';
@@ -49,6 +51,7 @@ export function Sidebar({
   const [isAISheetOpen, setIsAISheetOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -186,6 +189,18 @@ export function Sidebar({
                 role="menu"
                 aria-label="Sidebar menu"
               >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    setIsInviteOpen(true);
+                  }}
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-thread-text hover:bg-thread-soft min-h-[44px] w-full text-left"
+                  role="menuitem"
+                >
+                  <UserPlus className="w-4 h-4" aria-hidden="true" />
+                  <span>Invite friends</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => {

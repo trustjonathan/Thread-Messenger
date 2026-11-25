@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { setUsername } from '@/lib/apiClient';
+import { getPendingInviteCode } from '@/lib/inviteStorage';
 import { getHumanErrorMessage } from '../chat/components/ErrorMessage';
 import { AlertCircle, CheckCircle2, UserCheck, RefreshCw } from 'lucide-react';
 
@@ -40,7 +41,12 @@ export default function ChooseUsernamePage() {
       if (res?.error) {
         setApiErrorCode(res.error.code);
       } else {
-        navigate('/chats');
+        const pendingInvite = getPendingInviteCode();
+        if (pendingInvite) {
+          navigate(`/invite/${pendingInvite}`);
+        } else {
+          navigate('/chats');
+        }
       }
     } catch {
       setApiErrorCode('OPERATION_FAILED');

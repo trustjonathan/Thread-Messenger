@@ -30,7 +30,7 @@ export const UPDATES: UpdateAnnouncement[] = [
     version: 'group-chat-1',
     phase: 'after',
     title: 'Group chat is now live',
-    body: 'Group chat is now live in Thread! Tap New group from your chats list to start a conversation.',
+    body: 'Group chat and Thread AI are now live in Thread! Tap New group from your chats list to start a conversation, or seek help from Thread AI',
     startsAt: '2026-11-25T06:00:00Z',
     endsAt: '2026-11-30T00:00:00Z',
   },

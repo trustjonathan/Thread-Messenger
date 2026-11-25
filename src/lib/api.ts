@@ -15,6 +15,7 @@ import type {
   AiQuota,
   AiChatTurn,
   AiChatResponse,
+  ResolvedInvite,
 } from '../types/api';
 
 /**
@@ -64,6 +65,13 @@ export function mapError(err: unknown): ApiError {
     return {
       code: 'NOT_ALLOWED',
       message: 'Only the group creator can add members.',
+      details: err,
+    };
+  }
+  if (msg.includes('INVALID_INVITE')) {
+    return {
+      code: 'INVALID_INVITE',
+      message: 'This invite link is invalid or has expired.',
       details: err,
     };
   }
@@ -1365,5 +1373,96 @@ export async function streamAiPrompt({
       return;
     }
     onError(mapError(err));
+  }
+}
+
+
+/**
+ * Retrieves the caller's invite code, creating it if it doesn't exist yet.
+ */
+export async function getMyInviteCode(
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<string>> {
+  try {
+    const { data, error } = await client.rpc('get_my_invite_code' as any);
+    if (error) return { data: null, error: mapError(error) };
+    if (!data) return { data: null, error: { code: 'OPERATION_FAILED', message: 'Failed to retrieve invite code.' } };
+    return { data: data as string, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+/**
+ * Regenerates the caller's invite code, immediately invalidating the old code.
+ */
+export async function regenerateInviteCode(
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<string>> {
+  try {
+    const { data, error } = await client.rpc('regenerate_invite_code' as any);
+    if (error) return { data: null, error: mapError(error) };
+    if (!data) return { data: null, error: { code: 'OPERATION_FAILED', message: 'Failed to regenerate invite code.' } };
+    return { data: data as string, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+/**
+ * Resolves an invite code without revealing caller or inviter ID.
+ * Returns only { username, displayName, avatarSeed }.
+ */
+export async function resolveInvite(
+  code: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<ResolvedInvite>> {
+  try {
+    const cleanCode = code.trim();
+    const { data, error } = await client.rpc('resolve_invite' as any, {
+      p_code: cleanCode,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    const rows = data as unknown as Array<{
+      username: string;
+      display_name: string;
+      avatar_seed?: string | null;
+    }>;
+    if (!rows || rows.length === 0 || !rows[0].username) {
+      return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
+    }
+    return {
+      data: {
+        username: rows[0].username,
+        displayName: rows[0].display_name,
+        avatarSeed: rows[0].avatar_seed,
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+/**
+ * Redeems an invite code for an authenticated user.
+ * Returns the inviter's username so the client can trigger the new-chat confirmation.
+ */
+export async function redeemInvite(
+  code: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<string>> {
+  try {
+    const cleanCode = code.trim();
+    const { data, error } = await client.rpc('redeem_invite' as any, {
+      p_code: cleanCode,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    if (!data) {
+      return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
+    }
+    return { data: data as string, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
   }
 }
