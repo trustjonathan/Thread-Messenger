@@ -16,13 +16,18 @@ import InviteLandingPage from '@/features/invite/InviteLandingPage';
 import { InviteFriendsModal } from '@/features/chat/components/InviteFriendsModal';
 import { EmptyState } from '@/components/layout/EmptyState';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/database';
 
 describe('Invite Links Storage & OAuth Redirect Resilience', () => {
   let mockStore: Record<string, string> = {};
 
   beforeEach(() => {
     mockStore = {};
-    (global as any).window = {
+    Object.defineProperty(global, 'window', {
+      configurable: true,
+      writable: true,
+      value: {
       localStorage: {
         getItem: (k: string) => mockStore[k] || null,
         setItem: (k: string, v: string) => {
@@ -32,7 +37,8 @@ describe('Invite Links Storage & OAuth Redirect Resilience', () => {
           delete mockStore[k];
         },
       },
-    };
+      },
+    });
     clearPendingInviteCode();
   });
 
@@ -74,7 +80,7 @@ describe('Invite Links API Client Tests', () => {
       data: 'inviteCode99',
       error: null,
     });
-    const mockClient = { rpc: mockRpc } as any;
+    const mockClient = { rpc: mockRpc } as unknown as SupabaseClient<Database>;
 
     const res = await getMyInviteCode(mockClient);
     expect(mockRpc).toHaveBeenCalledWith('get_my_invite_code');
@@ -87,7 +93,7 @@ describe('Invite Links API Client Tests', () => {
       data: 'newRegenCode88',
       error: null,
     });
-    const mockClient = { rpc: mockRpc } as any;
+    const mockClient = { rpc: mockRpc } as unknown as SupabaseClient<Database>;
 
     const res = await regenerateInviteCode(mockClient);
     expect(mockRpc).toHaveBeenCalledWith('regenerate_invite_code');
@@ -106,7 +112,7 @@ describe('Invite Links API Client Tests', () => {
       ],
       error: null,
     });
-    const mockClient = { rpc: mockRpc } as any;
+    const mockClient = { rpc: mockRpc } as unknown as SupabaseClient<Database>;
 
     const res = await resolveInvite('testcode1234', mockClient);
     expect(mockRpc).toHaveBeenCalledWith('resolve_invite', { p_code: 'testcode1234' });
@@ -116,9 +122,9 @@ describe('Invite Links API Client Tests', () => {
       avatarSeed: 'seed123',
     });
     // Ensure no sensitive fields leaked
-    expect((res.data as any).id).toBeUndefined();
-    expect((res.data as any).user_id).toBeUndefined();
-    expect((res.data as any).email).toBeUndefined();
+    expect(res.data).not.toHaveProperty('id');
+    expect(res.data).not.toHaveProperty('user_id');
+    expect(res.data).not.toHaveProperty('email');
   });
 
   it('resolveInvite maps empty or invalid responses to generic INVALID_INVITE error', async () => {
@@ -126,7 +132,7 @@ describe('Invite Links API Client Tests', () => {
       data: [],
       error: null,
     });
-    const mockClient = { rpc: mockRpc } as any;
+    const mockClient = { rpc: mockRpc } as unknown as SupabaseClient<Database>;
 
     const res = await resolveInvite('badcode', mockClient);
     expect(res.data).toBeNull();
@@ -138,7 +144,7 @@ describe('Invite Links API Client Tests', () => {
       data: 'inviter_alice',
       error: null,
     });
-    const mockClient = { rpc: mockRpc } as any;
+    const mockClient = { rpc: mockRpc } as unknown as SupabaseClient<Database>;
 
     const res = await redeemInvite('validInviteCode', mockClient);
     expect(mockRpc).toHaveBeenCalledWith('redeem_invite', { p_code: 'validInviteCode' });
@@ -150,7 +156,7 @@ describe('Invite Links API Client Tests', () => {
       data: null,
       error: { message: 'INVALID_INVITE' },
     });
-    const mockClient = { rpc: mockRpc } as any;
+    const mockClient = { rpc: mockRpc } as unknown as SupabaseClient<Database>;
 
     const res = await redeemInvite('selfOrBlockedCode', mockClient);
     expect(res.data).toBeNull();
@@ -189,12 +195,16 @@ describe('Invite Links UI & Modals', () => {
 describe('Share API Fallback Handling', () => {
   it('falls back to clipboard copy if navigator.share fails or is unavailable', async () => {
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
-    (global as any).navigator = {
-      clipboard: {
-        writeText: writeTextMock,
+    Object.defineProperty(global, 'navigator', {
+      configurable: true,
+      writable: true,
+      value: {
+        clipboard: {
+          writeText: writeTextMock,
+        },
+        share: vi.fn().mockRejectedValue(new Error('AbortError')),
       },
-      share: vi.fn().mockRejectedValue(new Error('AbortError')),
-    };
+    });
 
     const link = 'https://thread.app/invite/abc123xyz';
     const res = await copyTextToClipboard(link);

@@ -1309,14 +1309,16 @@ export async function streamAiPrompt({
     let buffer = '';
     let currentEvent = 'message';
 
-    while (true) {
-      const { done, value } = await reader.read();
+    let done = false;
+    while (!done) {
+      const result = await reader.read();
+      done = result.done;
       if (done) {
         buffer += decoder.decode();
         break;
       }
 
-      buffer += decoder.decode(value, { stream: true });
+      buffer += decoder.decode(result.value, { stream: true });
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() ?? '';
 
@@ -1384,7 +1386,7 @@ export async function getMyInviteCode(
   client: SupabaseClient<Database> = defaultClient
 ): Promise<ApiResult<string>> {
   try {
-    const { data, error } = await client.rpc('get_my_invite_code' as any);
+    const { data, error } = await client.rpc('get_my_invite_code' as never);
     if (error) return { data: null, error: mapError(error) };
     if (!data) return { data: null, error: { code: 'OPERATION_FAILED', message: 'Failed to retrieve invite code.' } };
     return { data: data as string, error: null };
@@ -1400,7 +1402,7 @@ export async function regenerateInviteCode(
   client: SupabaseClient<Database> = defaultClient
 ): Promise<ApiResult<string>> {
   try {
-    const { data, error } = await client.rpc('regenerate_invite_code' as any);
+    const { data, error } = await client.rpc('regenerate_invite_code' as never);
     if (error) return { data: null, error: mapError(error) };
     if (!data) return { data: null, error: { code: 'OPERATION_FAILED', message: 'Failed to regenerate invite code.' } };
     return { data: data as string, error: null };
@@ -1419,9 +1421,9 @@ export async function resolveInvite(
 ): Promise<ApiResult<ResolvedInvite>> {
   try {
     const cleanCode = code.trim();
-    const { data, error } = await client.rpc('resolve_invite' as any, {
+    const { data, error } = await client.rpc('resolve_invite' as never, {
       p_code: cleanCode,
-    });
+    } as never);
     if (error) return { data: null, error: mapError(error) };
     const rows = data as unknown as Array<{
       username: string;
@@ -1454,9 +1456,9 @@ export async function redeemInvite(
 ): Promise<ApiResult<string>> {
   try {
     const cleanCode = code.trim();
-    const { data, error } = await client.rpc('redeem_invite' as any, {
+    const { data, error } = await client.rpc('redeem_invite' as never, {
       p_code: cleanCode,
-    });
+    } as never);
     if (error) return { data: null, error: mapError(error) };
     if (!data) {
       return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };

@@ -469,8 +469,10 @@ export async function handleAiChatRequest(
             );
           }
 
-          while (true) {
-            const { done, value } = await reader.read();
+          let done = false;
+          while (!done) {
+            const result = await reader.read();
+            done = result.done;
             if (done) {
               sseBuffer += decoder.decode();
               if (sseBuffer) {
@@ -492,7 +494,7 @@ export async function handleAiChatRequest(
               break;
             }
 
-            sseBuffer += decoder.decode(value, { stream: true });
+            sseBuffer += decoder.decode(result.value, { stream: true });
             const lines = sseBuffer.split(/\r?\n/);
             sseBuffer = lines.pop() ?? '';
             for (const line of lines) {

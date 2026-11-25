@@ -4,6 +4,8 @@ import { AiChat } from '../../src/components/layout/AiChat';
 import { MessageRenderer } from '../../src/components/chat/MessageRenderer';
 import { copyTextToClipboard } from '../../src/lib/clipboard';
 import { streamAiPrompt } from '../../src/lib/api';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../../src/types/database';
 
 describe('AI Message Layout (No Card, Direct on Background)', () => {
   it('verifies AI messages do NOT have card, bubble, border, or shadow classes', () => {
@@ -92,11 +94,15 @@ describe('Copy Feature and Clipboard Utility', () => {
 
   it('copies exact raw Markdown with LaTeX intact using navigator.clipboard', async () => {
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
-    (global as any).navigator = {
-      clipboard: {
-        writeText: writeTextMock,
+    Object.defineProperty(global, 'navigator', {
+      configurable: true,
+      writable: true,
+      value: {
+        clipboard: {
+          writeText: writeTextMock,
+        },
       },
-    };
+    });
 
     const rawMarkdownWithLatex = 'Consider $\\frac{3}{4}$ and $$\\int_0^1 x\\,dx$$.';
     const res = await copyTextToClipboard(rawMarkdownWithLatex);
@@ -118,18 +124,26 @@ describe('Copy Feature and Clipboard Utility', () => {
       },
     };
 
-    (global as any).navigator = {
-      clipboard: {
-        writeText: vi.fn().mockRejectedValue(new Error('Blocked')),
+    Object.defineProperty(global, 'navigator', {
+      configurable: true,
+      writable: true,
+      value: {
+        clipboard: {
+          writeText: vi.fn().mockRejectedValue(new Error('Blocked')),
+        },
       },
-    };
-    (global as any).document = {
-      createElement: vi.fn().mockReturnValue(mockTextarea),
-      body: {
-        appendChild: vi.fn(),
+    });
+    Object.defineProperty(global, 'document', {
+      configurable: true,
+      writable: true,
+      value: {
+        createElement: vi.fn().mockReturnValue(mockTextarea),
+        body: {
+          appendChild: vi.fn(),
+        },
+        execCommand: execCommandMock,
       },
-      execCommand: execCommandMock,
-    };
+    });
 
     const res = await copyTextToClipboard('Raw markdown test');
     expect(res.success).toBe(true);
@@ -139,39 +153,51 @@ describe('Copy Feature and Clipboard Utility', () => {
   });
 
   it('selects targetElement if both clipboard methods fail', async () => {
-    (global as any).navigator = {
-      clipboard: {
-        writeText: vi.fn().mockRejectedValue(new Error('Blocked')),
+    Object.defineProperty(global, 'navigator', {
+      configurable: true,
+      writable: true,
+      value: {
+        clipboard: {
+          writeText: vi.fn().mockRejectedValue(new Error('Blocked')),
+        },
       },
-    };
+    });
 
     const removeAllRangesMock = vi.fn();
     const addRangeMock = vi.fn();
     const selectNodeContentsMock = vi.fn();
 
-    (global as any).document = {
-      createElement: vi.fn().mockReturnValue({
-        style: {},
-        setAttribute: vi.fn(),
-        select: vi.fn(),
-        setSelectionRange: vi.fn(),
-        parentNode: { removeChild: vi.fn() },
-      }),
-      body: { appendChild: vi.fn() },
-      execCommand: vi.fn().mockReturnValue(false),
-      createRange: vi.fn().mockReturnValue({
-        selectNodeContents: selectNodeContentsMock,
-      }),
-    };
+    Object.defineProperty(global, 'document', {
+      configurable: true,
+      writable: true,
+      value: {
+        createElement: vi.fn().mockReturnValue({
+          style: {},
+          setAttribute: vi.fn(),
+          select: vi.fn(),
+          setSelectionRange: vi.fn(),
+          parentNode: { removeChild: vi.fn() },
+        }),
+        body: { appendChild: vi.fn() },
+        execCommand: vi.fn().mockReturnValue(false),
+        createRange: vi.fn().mockReturnValue({
+          selectNodeContents: selectNodeContentsMock,
+        }),
+      },
+    });
 
-    (global as any).window = {
-      getSelection: vi.fn().mockReturnValue({
-        removeAllRanges: removeAllRangesMock,
-        addRange: addRangeMock,
-      }),
-    };
+    Object.defineProperty(global, 'window', {
+      configurable: true,
+      writable: true,
+      value: {
+        getSelection: vi.fn().mockReturnValue({
+          removeAllRanges: removeAllRangesMock,
+          addRange: addRangeMock,
+        }),
+      },
+    });
 
-    const dummyEl = { nodeType: 1 } as any;
+    const dummyEl = { nodeType: 1 } as unknown as Node;
     const res = await copyTextToClipboard('Select me', dummyEl);
 
     expect(res.success).toBe(false);
@@ -242,7 +268,7 @@ describe('Stream Parser and Edge/Client Stream Handling', () => {
       },
       supabaseUrl: 'https://test.supabase.co',
       supabaseKey: 'fake-key',
-    } as any;
+    } as unknown as SupabaseClient<Database>;
 
     await streamAiPrompt({
       prompt: 'Hello',
