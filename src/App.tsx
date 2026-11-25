@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, type ReactNode } from 'react';
+import { useEffect, useState, useCallback, lazy, Suspense, type ReactNode } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -11,16 +11,19 @@ import { getPendingInviteCode } from '@/lib/inviteStorage';
 import type { CurrentUser } from '@/types/api';
 
 // Pages
-import LandingPage from './features/landing/LandingPage';
-import SignInPage from './features/auth/SignInPage';
-import ChooseUsernamePage from './features/auth/ChooseUsernamePage';
-import NewGroupPage from './features/chat/NewGroupPage';
-import ChatLayout from './components/layout/ChatLayout';
-import SettingsPage from './features/settings/SettingsPage';
-import AvatarPage from './features/settings/AvatarPage';
-import PrivacyPage from './features/legal/PrivacyPage';
-import TermsPage from './features/legal/TermsPage';
-import InviteLandingPage from './features/invite/InviteLandingPage';
+const SignInPage = lazy(() => import('./features/auth/SignInPage'));
+const ChooseUsernamePage = lazy(() => import('./features/auth/ChooseUsernamePage'));
+const NewGroupPage = lazy(() => import('./features/chat/NewGroupPage'));
+const ChatLayout = lazy(() => import('./components/layout/ChatLayout'));
+const SettingsPage = lazy(() => import('./features/settings/SettingsPage'));
+const AvatarPage = lazy(() => import('./features/settings/AvatarPage'));
+
+const LandingPage = lazy(() => import('./features/landing/LandingPage'));
+const PrivacyPage = lazy(() => import('./features/legal/PrivacyPage'));
+const TermsPage = lazy(() => import('./features/legal/TermsPage'));
+const HelpPage = lazy(() => import('./features/public/HelpPage'));
+const ContactPage = lazy(() => import('./features/public/ContactPage'));
+const InvitePage = lazy(() => import('./features/invite/InviteLandingPage'));
 
 // Context
 import { AvatarOverrideProvider } from '@/lib/avatarOverride';
@@ -35,43 +38,6 @@ interface ProtectedRouteProps {
   user: CurrentUser | null;
   loading: boolean;
   children: ReactNode;
-}
-
-/**
- * Root route guard:
- * - Signed out -> /signin
- * - Signed in with usernameSet === false -> /choose-username
- * - Signed in with usernameSet === true -> /chats
- */
-function RootRoute({
-  user,
-  loading,
-}: {
-  user: CurrentUser | null;
-  loading: boolean;
-}) {
-  if (loading) {
-    return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/signin" replace />;
-  }
-
-  if (!user.usernameSet) {
-    return <Navigate to="/choose-username" replace />;
-  }
-
-  const pendingInvite = getPendingInviteCode();
-  if (pendingInvite) {
-    return <Navigate to={`/invite/${encodeURIComponent(pendingInvite)}`} replace />;
-  }
-
-  return <Navigate to="/chats" replace />;
 }
 
 /**
@@ -174,6 +140,26 @@ export function App() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
+    const applyTheme = () => {
+      const savedTheme = localStorage.getItem('thread-theme');
+      document.documentElement.classList.toggle(
+        'dark',
+        savedTheme ? savedTheme === 'dark' : colorScheme.matches
+      );
+    };
+    const handleColorSchemeChange = (event: MediaQueryListEvent) => {
+      if (!localStorage.getItem('thread-theme')) {
+        document.documentElement.classList.toggle('dark', event.matches);
+      }
+    };
+
+    applyTheme();
+    colorScheme.addEventListener('change', handleColorSchemeChange);
+    return () => colorScheme.removeEventListener('change', handleColorSchemeChange);
+  }, []);
+
   // Auth state listener — onAuthChange fires immediately with INITIAL_SESSION
   useEffect(() => {
     let mounted = true;
@@ -233,15 +219,31 @@ export function App() {
         <OfflineBanner />
         <UpdateBanner />
         <NotificationPrompt />
+        <Suspense
+          fallback={
+            <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+            </div>
+          }
+        >
         <Routes>
-        {/* Root Route: signed-out -> /signin; signed-in -> /chats or /choose-username */}
-        <Route path="/" element={<RootRoute user={user} loading={loading} />} />
+        {/* Root: signed-out visitors see the public landing page. */}
+        <Route
+          path="/"
+          element={
+            <GuestRoute user={user} loading={loading}>
+              <LandingPage />
+            </GuestRoute>
+          }
+        />
 
         {/* Invite link landing route */}
-        <Route path="/invite/:code" element={<InviteLandingPage />} />
+        <Route path="/invite/:code" element={<InvitePage />} />
 
         {/* Public Landing Page */}
         <Route path="/landing" element={<LandingPage />} />
+        <Route path="/help" element={<HelpPage />} />
+        <Route path="/contact" element={<ContactPage />} />
 
         {/* Sign In */}
         <Route
@@ -340,6 +342,7 @@ export function App() {
           }
         />
       </Routes>
+        </Suspense>
       <InstallPrompt />
     </BrowserRouter>
     </AvatarOverrideProvider>

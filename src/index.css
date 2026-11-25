@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Thread theme tokens — light + dark via prefers-color-scheme */
+/* Thread theme tokens for the light and dark modes. */
 :root {
   --thread-accent: #4f46e5;
   --thread-bg: #f8fafc;
@@ -19,21 +19,40 @@
   --thread-read-tick-dark: #6ee7b7;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --thread-accent: #4f46e5;
-    --thread-bg: #0b1020;
-    --thread-surface: #131a2e;
-    --thread-text: #e5e9f5;
-    --thread-muted: #9aa6c0;
-    --thread-border: #232c47;
-    --thread-soft: #1b2347;
-    --thread-bubble-theirs: #1e2742;
-    --thread-bubble-theirs-text: #e5e9f5;
-    --thread-bubble-mine: #4f46e5;
-    --thread-bubble-mine-text: #ffffff;
-    --thread-read-tick-light: #047857;
-    --thread-read-tick-dark: #6ee7b7;
+.dark {
+  --thread-accent: #4f46e5;
+  --thread-bg: #0b1020;
+  --thread-surface: #131a2e;
+  --thread-text: #e5e9f5;
+  --thread-muted: #9aa6c0;
+  --thread-border: #232c47;
+  --thread-soft: #1b2347;
+  --thread-bubble-theirs: #1e2742;
+  --thread-bubble-theirs-text: #e5e9f5;
+  --thread-bubble-mine: #4f46e5;
+  --thread-bubble-mine-text: #ffffff;
+  --thread-read-tick-light: #047857;
+  --thread-read-tick-dark: #6ee7b7;
+}
+
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(1.25rem);
+  transition:
+    opacity 500ms ease,
+    transform 500ms ease;
+}
+
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }
 
