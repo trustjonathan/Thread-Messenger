@@ -8,6 +8,13 @@ import {
   updateDisplayName,
   listBlockedUsers,
 } from '@/lib/apiClient';
+import { IdenticonAvatar } from '@/features/chat/components/IdenticonAvatar';
+import {
+  requestNotificationPermission,
+  isNotificationSupported,
+  getNotificationsEnabled,
+  setNotificationsEnabled,
+} from '@/lib/notifications';
 import type { BlockedUser } from '@/types/api';
 import {
   Copy,
@@ -17,6 +24,9 @@ import {
   ChevronRight,
   ShieldOff,
   AlertCircle,
+  Bell,
+  BellOff,
+  ArrowLeft,
 } from 'lucide-react';
 
 type PageState = 'loading' | 'ready' | 'error';
@@ -32,7 +42,23 @@ export default function SettingsPage() {
   const [displayNameDraft, setDisplayNameDraft] = useState('');
   const [copied, setCopied] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
-  const [saveError, setSaveError] = useState('');
+  const [saveError, setSaveError] = useState<string>('');
+  const [notificationsEnabled, setNotificationsEnabledState] = useState<boolean>(() =>
+    isNotificationSupported() ? getNotificationsEnabled() : false
+  );
+
+  const handleToggleNotifications = async (enabled: boolean) => {
+    setNotificationsEnabledState(enabled);
+    setNotificationsEnabled(enabled);
+
+    if (enabled && window.Notification.permission !== 'granted') {
+      const perm = await requestNotificationPermission();
+      if (perm !== 'granted') {
+        setNotificationsEnabledState(false);
+        setNotificationsEnabled(false);
+      }
+    }
+  };
 
   // ── Blocked users state ──────────────────────────────────────────
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
@@ -42,6 +68,7 @@ export default function SettingsPage() {
 
   // ── Sign out state ───────────────────────────────────────────────
   const [signingOut, setSigningOut] = useState(false);
+  const [avatarSeed, setAvatarSeed] = useState('');
 
   // ── Load user ────────────────────────────────────────────────────
   const loadUser = useCallback(async () => {
@@ -55,6 +82,7 @@ export default function SettingsPage() {
       setUsername(res.data.username);
       setDisplayName(res.data.displayName);
       setDisplayNameDraft(res.data.displayName);
+      setAvatarSeed(res.data.avatarSeed ?? '');
       setPageState('ready');
       loadBlocked();
     } catch {
@@ -178,7 +206,34 @@ export default function SettingsPage() {
   return (
     <main className="min-h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <div className="max-w-lg mx-auto p-4 space-y-4">
-        <h1 className="text-2xl font-bold tracking-tight py-4">Settings</h1>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/chats"
+            className="p-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px] min-w-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            aria-label="Back to chats"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <h1 className="text-2xl font-bold tracking-tight py-4">Settings</h1>
+        </div>
+
+        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+            Avatar
+          </h2>
+          <div className="flex items-center gap-4">
+            <IdenticonAvatar seed={avatarSeed || username} label={displayName || username} size={48} />
+            <div>
+              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{username}</p>
+              <Link
+                to="/settings/avatar"
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium min-h-[44px] inline-flex items-center"
+              >
+                Change avatar <ChevronRight className="w-3 h-3 ml-1" aria-hidden="true" />
+              </Link>
+            </div>
+          </div>
+        </section>
 
         {/* ── Username ──────────────────────────────────────────── */}
         <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
@@ -248,6 +303,72 @@ export default function SettingsPage() {
             {saveState === 'error' && (
               <p className="text-xs text-red-500" role="alert">{saveError}</p>
             )}
+          </div>
+        </section>
+
+        {/* ── Notifications ──────────────────────────────────────── */}
+        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+            Notifications
+          </h2>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {isNotificationSupported() ? (
+                <Bell
+                  className={`w-5 h-5 ${notificationsEnabled && window.Notification.permission === 'granted' ? 'text-indigo-600' : 'text-slate-400'}`}
+                  aria-hidden="true"
+                />
+              ) : (
+                <BellOff className="w-5 h-5 text-slate-400" aria-hidden="true" />
+              )}
+              <span className="text-sm font-medium text-slate-900 dark:text-slate-100">Notifications</span>
+            </div>
+            <div>
+              {!isNotificationSupported() ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Notifications not supported in this browser.
+                </p>
+              ) : notificationsEnabled && window.Notification.permission === 'denied' ? (
+                <>
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Blocked by browser — enable notifications in browser settings to receive alerts.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleNotifications(true)}
+                    className="mt-1 px-3 py-1 rounded-lg text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 transition-colors min-h-[36px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+                  >
+                    Re-request permission
+                  </button>
+                </>
+              ) : notificationsEnabled ? (
+                <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                  <Check className="w-3 h-3" aria-hidden="true" /> Enabled
+                </span>
+              ) : (
+                <span className="text-xs text-slate-500 dark:text-slate-400">Disabled</span>
+              )}
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={notificationsEnabled}
+              onClick={() => handleToggleNotifications(!notificationsEnabled)}
+              className={`relative inline-flex w-11 h-6 shrink-0 cursor-pointer rounded-full border-2 transition-colors duration-200 ${
+                notificationsEnabled
+                  ? 'bg-indigo-600 border-indigo-600'
+                  : 'bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600'
+              } focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900`}
+            >
+              <span
+                className={`block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
+                  notificationsEnabled
+                    ? 'translate-x-6'
+                    : 'translate-x-1'
+                }`}
+                aria-hidden="true"
+              />
+            </button>
           </div>
         </section>
 

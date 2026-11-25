@@ -15,14 +15,21 @@ import SignInPage from './features/auth/SignInPage';
 import ChooseUsernamePage from './features/auth/ChooseUsernamePage';
 import ChatListPage from './features/chat/ChatListPage';
 import NewChatPage from './features/chat/NewChatPage';
+import NewGroupPage from './features/chat/NewGroupPage';
 import ChatPage from './features/chat/ChatPage';
 import SettingsPage from './features/settings/SettingsPage';
+import AvatarPage from './features/settings/AvatarPage';
 import PrivacyPage from './features/legal/PrivacyPage';
 import TermsPage from './features/legal/TermsPage';
+
+// Context
+import { AvatarOverrideProvider } from '@/lib/avatarOverride';
 
 // PWA Components
 import InstallPrompt from './pwa/InstallPrompt';
 import OfflineBanner from './pwa/OfflineBanner';
+import UpdateBanner from './pwa/UpdateBanner';
+import NotificationPrompt from './features/settings/NotificationPrompt';
 
 interface ProtectedRouteProps {
   user: CurrentUser | null;
@@ -212,9 +219,12 @@ export function App() {
   }, [user, triggerUpdateLastSeen]);
 
   return (
-    <BrowserRouter>
-      <OfflineBanner />
-      <Routes>
+    <AvatarOverrideProvider>
+      <BrowserRouter>
+        <OfflineBanner />
+        <UpdateBanner />
+        <NotificationPrompt />
+        <Routes>
         {/* Root Route: signed-out -> /signin; signed-in -> /chats or /choose-username */}
         <Route path="/" element={<RootRoute user={user} loading={loading} />} />
 
@@ -259,6 +269,14 @@ export function App() {
           }
         />
         <Route
+          path="/chats/new-group"
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <NewGroupPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/chats/:conversationId"
           element={
             <ProtectedRoute user={user} loading={loading}>
@@ -268,6 +286,14 @@ export function App() {
         />
 
         {/* Settings */}
+        <Route
+          path="/settings/avatar"
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <AvatarPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/settings"
           element={
@@ -294,6 +320,7 @@ export function App() {
       </Routes>
       <InstallPrompt />
     </BrowserRouter>
+    </AvatarOverrideProvider>
   );
 }
 

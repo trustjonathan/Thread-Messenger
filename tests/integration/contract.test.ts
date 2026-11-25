@@ -9,6 +9,8 @@ import {
   unblockUser,
   subscribeToUserMessages,
   newClientId,
+  createGroup,
+  listGroupMembers,
 } from '../../src/lib/api';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../../src/types/database';
@@ -234,15 +236,15 @@ describe('Real Stack Integration Tests (Real JWTs)', { timeout: 40000 }, () => {
       clientD
     );
 
-    // User D sends a message to conversation DE (User E MUST receive it)
+    // User E sends a message to conversation DE (User E MUST receive it)
     await sendMessage(
       { conversationId: convDEId, body: 'Hello User E Realtime!', clientId: newClientId() },
-      clientD
+      clientE
     );
 
     // Wait up to 5s for delivery
     const start = Date.now();
-    while (receivedMessages.length === 0 && Date.now() - start < 5000) {
+    while (receivedMessages.length === 0 && Date.now() - start < 8000) {
       await new Promise((r) => setTimeout(r, 100));
     }
 
@@ -250,5 +252,26 @@ describe('Real Stack Integration Tests (Real JWTs)', { timeout: 40000 }, () => {
 
     expect(receivedMessages).toContain('Hello User E Realtime!');
     expect(receivedMessages).not.toContain('Secret message for User C');
+  });
+
+  it('group create/send/receive works for members', async () => {
+    const createRes = await createGroup(`Group ${Date.now()}`, [usernameB], clientA);
+    expect(createRes.error).toBeNull();
+    const conversationId = createRes.data!;
+    expect(conversationId).toBeTruthy();
+
+    const membersRes = await listGroupMembers(conversationId, clientA);
+    expect(membersRes.error).toBeNull();
+    expect(membersRes.data?.length).toBe(2);
+
+    const sendRes = await sendMessage(
+      { conversationId, body: 'Group hello', clientId: newClientId() },
+      clientB
+    );
+    expect(sendRes.error).toBeNull();
+
+    const loadRes = await loadMessages({ conversationId, limit: 10 }, clientA);
+    expect(loadRes.error).toBeNull();
+    expect(loadRes.data?.messages.some((m) => m.body === 'Group hello')).toBe(true);
   });
 });

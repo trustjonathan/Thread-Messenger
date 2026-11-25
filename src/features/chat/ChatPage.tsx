@@ -6,6 +6,8 @@ import {
   sendMessage,
   newClientId,
   markRead,
+  setTyping,
+  listGroupMembers,
   blockUser,
   reportContent,
   subscribeToUserMessages,
@@ -13,11 +15,15 @@ import {
 } from '@/lib/apiClient';
 import type { MessageCursor, ConversationSummary, Message } from '@/types/api';
 import { Avatar } from './components/Avatar';
+import { GroupHeader } from './components/GroupHeader';
+import { GroupSettingsDrawer } from './components/GroupSettingsDrawer';
+import { IdenticonAvatar } from './components/IdenticonAvatar';
 import { MessageStatus } from '@/components/chat/MessageStatus';
 import { DateSeparator } from './components/DateSeparator';
 import { ReportModal } from './components/ReportModal';
 import { BlockModal } from './components/BlockModal';
 import { getHumanErrorMessage } from './components/ErrorMessage';
+import { showIncomingMessageNotification } from '@/lib/notifications';
 import {
   ArrowLeft,
   MoreVertical,
@@ -51,6 +57,12 @@ export default function ChatPage() {
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
+  const [groupTitle, setGroupTitle] = useState<string | null>(null);
+  const [memberCount, setMemberCount] = useState(0);
+  const [groupCreatedBy, setGroupCreatedBy] = useState<string | null>(null);
+  const [groupDescription, setGroupDescription] = useState<string | null>(null);
+  const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
+  const [groupMembers, setGroupMembers] = useState<import('@/types/api').GroupMember[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [nextCursor, setNextCursor] = useState<MessageCursor | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -68,6 +80,7 @@ export default function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLElement>(null);
   const [composerHeight, setComposerHeight] = useState(64);
+  const lastTypingRef = useRef(0);
 
   // Measure composer height with ResizeObserver
   useEffect(() => {
@@ -149,11 +162,24 @@ export default function ChatPage() {
         if (currentConv?.otherUser) {
           setOtherUser(currentConv.otherUser);
         }
+        if (currentConv?.kind === 'group') {
+          setGroupTitle(currentConv.title || 'Group');
+          setMemberCount(currentConv.memberCount || 0);
+          setGroupCreatedBy(currentConv.createdBy || null);
+          setGroupDescription(currentConv.description || null);
+        }
       }
     } catch {
       // Handled gracefully
     }
   }, [conversationId]);
+
+  useEffect(() => {
+    let active = true;
+    if (!conversationId || !groupTitle) return;
+    listGroupMembers(conversationId).then((res) => { if (active) setGroupMembers(res.data || []); });
+    return () => { active = false; };
+  }, [conversationId, groupTitle]);
 
   // Load initial messages (API returns newest first; reverse for bottom-newest display)
   const fetchInitialMessages = useCallback(async () => {
@@ -278,6 +304,31 @@ export default function ChatPage() {
     const unsubscribe = subscribeToUserMessages(
       currentUserId,
       (incomingMsg: Message) => {
+        // Desktop notification for incoming message (checked before the
+        // early return so messages from other conversations also notify).
+        if (
+          currentUserId &&
+          incomingMsg.senderId !== currentUserId &&
+          (document.visibilityState !== 'visible' || incomingMsg.conversationId !== conversationId)
+        ) {
+          const sender = groupMembers.find((m) => m.userId === incomingMsg.senderId);
+          const senderName = sender
+            ? sender.displayName || sender.username
+            : otherUser?.displayName || otherUser?.username || 'Someone';
+          const convoTitle = groupTitle || otherUser?.displayName || otherUser?.username || 'Chat';
+          const title =
+            incomingMsg.conversationId === conversationId && groupTitle
+              ? `${senderName} in ${convoTitle}`
+              : incomingMsg.conversationId !== conversationId
+                ? 'New message'
+                : `${senderName}:`;
+          showIncomingMessageNotification({
+            conversationId: incomingMsg.conversationId,
+            title,
+            body: incomingMsg.body,
+          });
+        }
+
         if (incomingMsg.conversationId !== conversationId) return;
 
         // De-duplicate incoming realtime messages against the list by id AND clientId
@@ -448,7 +499,7 @@ export default function ChatPage() {
     navigate('/chats');
   };
 
-  const otherDisplayName = otherUser?.displayName || otherUser?.username || 'Chat';
+  const otherDisplayName = groupTitle || otherUser?.displayName || otherUser?.username || 'Chat';
   const otherUsername = otherUser?.username;
   const charCount = inputBody.length;
   const isSendDisabled = inputBody.trim().length === 0 || charCount > 2000;
@@ -466,18 +517,22 @@ export default function ChatPage() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
 
-          <Avatar name={otherDisplayName} size="sm" />
-
-          <div className="min-w-0">
-            <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
-              {otherDisplayName}
-            </h1>
-            {otherUsername && (
-              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                @{otherUsername}
-              </p>
-            )}
-          </div>
+          {groupTitle ? (
+            <div className="min-w-0">
+              <GroupHeader conversationId={conversationId || ''} title={groupTitle} memberCount={memberCount} onClick={() => setIsGroupSettingsOpen(true)} />
+              {groupDescription && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{groupDescription}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <Avatar name={otherDisplayName} size="sm" />
+              <div className="min-w-0">
+                <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{otherDisplayName}</h1>
+                {otherUsername && <p className="text-xs text-slate-500 dark:text-slate-400 truncate">@{otherUsername}</p>}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Options Menu (Report, Block) */}
@@ -630,6 +685,18 @@ export default function ChatPage() {
               {showDateSeparator && <DateSeparator date={msg.createdAt} />}
 
               <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                {groupTitle && (() => {
+                  const sender = groupMembers.find((m) => m.userId === msg.senderId);
+                  if (!sender) return null;
+                  return (
+                    <div className="flex items-center gap-1.5 mb-1 px-1 text-[11px] text-slate-500 dark:text-slate-400">
+                      <IdenticonAvatar seed={sender.avatarSeed || sender.userId} label={sender.displayName || sender.username} size={18} />
+                      <span className="font-medium">{sender.displayName || sender.username}</span>
+                      <span>@{sender.username}</span>
+                    </div>
+                  );
+                })()}
+
                 <div
                   className={`max-w-[80%] sm:max-w-md px-4 py-2.5 rounded-2xl text-sm break-words whitespace-pre-wrap ${
                     isOwn
@@ -686,7 +753,7 @@ export default function ChatPage() {
               ref={textareaRef}
               rows={1}
               value={inputBody}
-              onChange={(e) => setInputBody(e.target.value)}
+              onChange={(e) => { setInputBody(e.target.value); if (conversationId && Date.now() - lastTypingRef.current > 3000) { lastTypingRef.current = Date.now(); setTyping(conversationId).catch(() => {}); } }}
               onKeyDown={handleKeyDown}
               maxLength={2000}
               placeholder="Message"
@@ -724,6 +791,18 @@ export default function ChatPage() {
           )}
         </form>
       </footer>
+
+      {isGroupSettingsOpen && groupTitle && (
+        <GroupSettingsDrawer
+          conversationId={conversationId || ''}
+          title={groupTitle}
+          description={groupDescription}
+          createdBy={groupCreatedBy}
+          currentUserId={currentUserId}
+          onClose={() => setIsGroupSettingsOpen(false)}
+          onLeft={() => navigate('/chats')}
+        />
+      )}
 
       {/* Modals */}
       <ReportModal

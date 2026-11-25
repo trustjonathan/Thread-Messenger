@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase as defaultClient } from './supabaseClient';
 import type { Database } from '../types/database';
 import type {
@@ -7,6 +7,7 @@ import type {
   BlockedUser,
   ConversationSummary,
   CurrentUser,
+  GroupMember,
   Message,
   MessageCursor,
   PaginatedMessages,
@@ -201,11 +202,18 @@ export async function listConversations(
     const summaries: ConversationSummary[] = (data || []).map((row) => ({
       conversationId: row.conversation_id,
       createdAt: row.created_at,
-      otherUser: {
-        id: row.other_user_id,
-        username: row.other_username,
-        displayName: row.other_display_name,
-      },
+      kind: row.kind === 'group' ? 'group' : 'direct',
+      title: row.title ?? null,
+      description: row.description ?? null,
+      createdBy: row.created_by ?? null,
+      otherUser: row.other_user_id
+        ? {
+            id: row.other_user_id,
+            username: row.other_username ?? '',
+            displayName: row.other_display_name ?? '',
+          }
+        : null,
+      memberCount: Number(row.member_count ?? 0),
       lastMessage: row.last_message_id
         ? {
             id: row.last_message_id,
@@ -536,6 +544,57 @@ export function subscribeToUserMessages(
 
 const authListeners = new Set<(user: CurrentUser | null) => void>();
 
+// ── Profile change broadcast (cross-client avatar propagation) ─────────────
+const profileChangeListeners = new Set<(userId: string, avatarSeed: string | null) => void>();
+let profileChannel: RealtimeChannel | null = null;
+
+function getProfileChannel(client: SupabaseClient<Database>): RealtimeChannel {
+  if (!profileChannel) {
+    profileChannel = client.channel('profile_changes');
+    profileChannel.on('broadcast', { event: 'avatar_changed' }, (payload) => {
+      const data = (payload as unknown) as { user_id?: string; avatar_seed?: string | null };
+      if (data.user_id) {
+        emitProfileChange(data.user_id, data.avatar_seed ?? null);
+      }
+    });
+    profileChannel.subscribe();
+  }
+  return profileChannel;
+}
+
+export function subscribeToProfileChanges(
+  listener: (userId: string, avatarSeed: string | null) => void,
+  client: SupabaseClient<Database> = defaultClient
+): () => void {
+  profileChangeListeners.add(listener);
+  getProfileChannel(client);
+  return () => {
+    profileChangeListeners.delete(listener);
+  };
+}
+
+function broadcastProfileChange(userId: string, avatarSeed: string | null, client: SupabaseClient<Database>): void {
+  try {
+    getProfileChannel(client).send({
+      type: 'broadcast',
+      event: 'avatar_changed',
+      payload: { user_id: userId, avatar_seed: avatarSeed },
+    });
+  } catch {
+    // broadcast best-effort; profile still saved in DB
+  }
+}
+
+function emitProfileChange(userId: string, avatarSeed: string | null): void {
+  for (const listener of profileChangeListeners) {
+    try {
+      listener(userId, avatarSeed);
+    } catch {
+      // ignore
+    }
+  }
+}
+
 async function emitAuthChange(client: SupabaseClient<Database> = defaultClient): Promise<void> {
   const res = await getCurrentUser(client);
   for (const listener of authListeners) {
@@ -615,7 +674,7 @@ export async function getCurrentUser(
     const user = authData.user;
     const { data: profile, error: profileError } = await client
       .from('profiles')
-      .select('id, username, display_name, username_set')
+      .select('id, username, display_name, username_set, avatar_seed')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -630,6 +689,7 @@ export async function getCurrentUser(
           username: profile.username,
           displayName: profile.display_name,
           usernameSet: profile.username_set,
+          avatarSeed: profile.avatar_seed,
         },
         error: null,
       };
@@ -792,6 +852,214 @@ export async function listBlockedUsers(
     }
 
     return { data: blocked, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function createGroup(
+  title: string,
+  memberUsernames: string[],
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<string>> {
+  try {
+    const { data, error } = await client.rpc('create_group', {
+      p_title: title,
+      p_member_usernames: memberUsernames,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: data as string, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function addGroupMembers(
+  conversationId: string,
+  usernames: string[],
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<number>> {
+  try {
+    const { data, error } = await client.rpc('add_group_members', {
+      p_conversation_id: conversationId,
+      p_usernames: usernames,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: Number(data ?? 0), error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function removeGroupMember(
+  conversationId: string,
+  userId: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await client.rpc('remove_group_member', {
+      p_conversation_id: conversationId,
+      p_user_id: userId,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: undefined, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function renameGroup(
+  conversationId: string,
+  title: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<string>> {
+  try {
+    const { data, error } = await client.rpc('rename_group', {
+      p_conversation_id: conversationId,
+      p_title: title,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: data as string, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function leaveGroup(
+  conversationId: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await client.rpc('leave_group', {
+      p_conversation_id: conversationId,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: undefined, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function deleteGroup(
+  conversationId: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await client.rpc('delete_group', {
+      p_conversation_id: conversationId,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: undefined, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function listGroupMembers(
+  conversationId: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<GroupMember[]>> {
+  try {
+    const { data, error } = await client.rpc('list_group_members', {
+      p_conversation_id: conversationId,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    const members: GroupMember[] = (data || []).map((r) => ({
+      userId: r.user_id,
+      username: r.username,
+      displayName: r.display_name,
+      role: r.role === 'admin' ? 'admin' : 'member',
+      joinedAt: r.joined_at,
+      lastReadAt: r.last_read_at,
+      avatarSeed: r.avatar_seed,
+    }));
+    return { data: members, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function searchUsersByPrefix(
+  query: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<UserProfilePreview[]>> {
+  try {
+    const { data, error } = await client.rpc('search_users_by_prefix', { p_query: query });
+    if (error) return { data: null, error: mapError(error) };
+    return {
+      data: (data || []).map((r) => ({ id: r.id, username: r.username, displayName: r.display_name, avatarSeed: null })),
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function searchMessages(
+  query: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<Array<{ conversationId: string; messageId: string; body: string; createdAt: string }>>> {
+  try {
+    const { data, error } = await client.rpc('search_messages', { p_query: query });
+    if (error) return { data: null, error: mapError(error) };
+    return {
+      data: (data || []).map((r) => ({
+        conversationId: r.conversation_id,
+        messageId: r.message_id,
+        body: r.body,
+        createdAt: r.created_at,
+      })),
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function setTyping(
+  conversationId: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await client.rpc('set_typing', { p_conversation_id: conversationId });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: undefined, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function updateGroupDescription(
+  conversationId: string,
+  description: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<string>> {
+  try {
+    const { data, error } = await client.rpc('update_group_description', {
+      p_conversation_id: conversationId,
+      p_description: description,
+    });
+    if (error) return { data: null, error: mapError(error) };
+    return { data: (data as string) ?? '', error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+export async function updateAvatarSeed(
+  seed: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<string>> {
+  try {
+    const { data, error } = await client.rpc('update_avatar_seed', { p_seed: seed });
+    if (error) return { data: null, error: mapError(error) };
+    emitAuthChange(client);
+    const user = (await getCurrentUser(client)).data;
+    if (user) {
+      broadcastProfileChange(user.id, seed, client);
+      emitProfileChange(user.id, seed);
+    }
+    return { data: data as string, error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };
   }

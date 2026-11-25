@@ -47,18 +47,24 @@ export type Database = {
           conversation_id: string
           joined_at: string
           last_read_at: string
+          removed_at: string | null
+          role: string
           user_id: string
         }
         Insert: {
           conversation_id: string
           joined_at?: string
           last_read_at?: string
+          removed_at?: string | null
+          role?: string
           user_id: string
         }
         Update: {
           conversation_id?: string
           joined_at?: string
           last_read_at?: string
+          removed_at?: string | null
+          role?: string
           user_id?: string
         }
         Relationships: [
@@ -81,18 +87,24 @@ export type Database = {
       conversations: {
         Row: {
           created_at: string
+          created_by: string | null
           id: string
           kind: string
+          title: string | null
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           id?: string
           kind?: string
+          title?: string | null
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           id?: string
           kind?: string
+          title?: string | null
         }
         Relationships: []
       }
@@ -180,6 +192,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_seed: string | null
           created_at: string
           display_name: string
           id: string
@@ -188,6 +201,7 @@ export type Database = {
           username_set: boolean
         }
         Insert: {
+          avatar_seed?: string | null
           created_at?: string
           display_name: string
           id: string
@@ -196,6 +210,7 @@ export type Database = {
           username_set?: boolean
         }
         Update: {
+          avatar_seed?: string | null
           created_at?: string
           display_name?: string
           id?: string
@@ -268,16 +283,42 @@ export type Database = {
         Returns: {
           conversation_id: string
           created_at: string
+          kind: string
+          title: string | null
+          description: string | null
+          created_by: string | null
           last_message_body: string
           last_message_created_at: string
           last_message_id: string
           last_message_sender_id: string
-          other_display_name: string
-          other_user_id: string
-          other_username: string
+          member_count: number
+          other_display_name: string | null
+          other_user_id: string | null
+          other_username: string | null
           unread_count: number
         }[]
       }
+      add_group_members: { Args: { p_conversation_id: string; p_usernames: string[] }; Returns: number }
+      create_group: { Args: { p_title: string; p_member_usernames: string[] }; Returns: string }
+      delete_group: { Args: { p_conversation_id: string }; Returns: undefined }
+      leave_group: { Args: { p_conversation_id: string }; Returns: undefined }
+      list_group_members: {
+        Args: { p_conversation_id: string }
+        Returns: { user_id: string; username: string; display_name: string; role: string; joined_at: string; last_read_at: string; avatar_seed: string | null }[]
+      }
+      search_users_by_prefix: {
+        Args: { p_query: string }
+        Returns: { id: string; username: string; display_name: string }[]
+      }
+      search_messages: {
+        Args: { p_query: string }
+        Returns: { conversation_id: string; message_id: string; body: string; created_at: string }[]
+      }
+      set_typing: { Args: { p_conversation_id: string }; Returns: undefined }
+      update_avatar_seed: { Args: { p_seed: string }; Returns: string }
+      update_group_description: { Args: { p_conversation_id: string; p_description: string }; Returns: string }
+      remove_group_member: { Args: { p_conversation_id: string; p_user_id: string }; Returns: undefined }
+      rename_group: { Args: { p_conversation_id: string; p_title: string }; Returns: string }
       mark_read: { Args: { p_conversation_id: string }; Returns: undefined }
       report_content: {
         Args: { p_message_id: string; p_reason: string; p_user_id: string }

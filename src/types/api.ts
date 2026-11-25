@@ -24,6 +24,7 @@ export interface UserProfilePreview {
   id: string;
   username: string;
   displayName: string;
+  avatarSeed?: string | null;
 }
 
 export interface CurrentUser {
@@ -31,6 +32,7 @@ export interface CurrentUser {
   username: string;
   displayName: string;
   usernameSet: boolean;
+  avatarSeed?: string | null;
 }
 
 export type BlockedUser = UserProfilePreview;
@@ -38,7 +40,12 @@ export type BlockedUser = UserProfilePreview;
 export interface ConversationSummary {
   conversationId: string;
   createdAt: string;
-  otherUser: UserProfilePreview;
+  kind: 'direct' | 'group';
+  title: string | null;
+  description: string | null;
+  createdBy: string | null;
+  otherUser: UserProfilePreview | null;
+  memberCount: number;
   lastMessage: {
     id: string;
     body: string; // Truncated to 100 characters max
@@ -55,6 +62,16 @@ export interface Message {
   clientId: string;
   body: string;
   createdAt: string;
+}
+
+export interface GroupMember {
+  userId: string;
+  username: string;
+  displayName: string;
+  role: 'admin' | 'member';
+  joinedAt: string;
+  lastReadAt: string;
+  avatarSeed?: string | null;
 }
 
 export interface MessageCursor {

@@ -179,7 +179,13 @@ export async function listConversations(): Promise<ApiResult<ConversationSummary
     return {
       conversationId: c.id,
       createdAt: c.createdAt,
+      kind: 'direct',
+      title: null,
+      description: null,
+      createdBy: null,
+      avatarSeed: null,
       otherUser: c.otherUser,
+      memberCount: 2,
       lastMessage: lastMsg
         ? {
             id: lastMsg.id,
@@ -451,6 +457,43 @@ export async function listBlockedUsers(): Promise<ApiResult<BlockedUser[]>> {
   return { data: [...mockBlockedList], error: null };
 }
 
+export async function createGroup(): Promise<ApiResult<string>> {
+  await simulateLatency();
+  return { data: null, error: { code: 'OPERATION_FAILED', message: 'Not implemented in mock' } };
+}
+export async function addGroupMembers(): Promise<ApiResult<number>> {
+  return { data: null, error: { code: 'OPERATION_FAILED', message: 'Not implemented in mock' } };
+}
+export async function removeGroupMember(): Promise<ApiResult<void>> {
+  return { data: null, error: { code: 'OPERATION_FAILED', message: 'Not implemented in mock' } };
+}
+export async function renameGroup(): Promise<ApiResult<string>> {
+  return { data: null, error: { code: 'OPERATION_FAILED', message: 'Not implemented in mock' } };
+}
+export async function leaveGroup(): Promise<ApiResult<void>> {
+  return { data: null, error: { code: 'OPERATION_FAILED', message: 'Not implemented in mock' } };
+}
+export async function deleteGroup(): Promise<ApiResult<void>> {
+  return { data: null, error: { code: 'OPERATION_FAILED', message: 'Not implemented in mock' } };
+}
+export async function listGroupMembers(): Promise<ApiResult<import('../types/api').GroupMember[]>> {
+  return { data: [], error: null };
+}
+export async function searchUsersByPrefix(): Promise<ApiResult<import('../types/api').UserProfilePreview[]>> {
+  return { data: [], error: null };
+}
+export async function searchMessages(): Promise<ApiResult<Array<{ conversationId: string; messageId: string; body: string; createdAt: string }>>> {
+  return { data: [], error: null };
+}
+export async function setTyping(): Promise<ApiResult<void>> {
+  return { data: undefined, error: null };
+}
+export async function updateAvatarSeed(): Promise<ApiResult<string>> { return { data: '', error: null }; }
+export function subscribeToProfileChanges(): () => void { return () => {}; }
+export async function updateGroupDescription(): Promise<ApiResult<string>> {
+  return { data: '', error: null };
+}
+
 // ---------------------------------------------------------------------------
 // Compile-time surface parity guard.
 // If api.mock.ts is missing any export from api.ts, TypeScript will error here.
@@ -476,6 +519,19 @@ const _mockSurface = {
   onAuthChange,
   updateDisplayName,
   listBlockedUsers,
+  createGroup,
+  addGroupMembers,
+  removeGroupMember,
+  renameGroup,
+  leaveGroup,
+  deleteGroup,
+  listGroupMembers,
+  searchUsersByPrefix,
+  searchMessages,
+  setTyping,
+  updateGroupDescription,
+  updateAvatarSeed,
+  subscribeToProfileChanges,
 } satisfies typeof RealApi;
 
 void _mockSurface;
