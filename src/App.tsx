@@ -13,10 +13,8 @@ import type { CurrentUser } from '@/types/api';
 import LandingPage from './features/landing/LandingPage';
 import SignInPage from './features/auth/SignInPage';
 import ChooseUsernamePage from './features/auth/ChooseUsernamePage';
-import ChatListPage from './features/chat/ChatListPage';
-import NewChatPage from './features/chat/NewChatPage';
 import NewGroupPage from './features/chat/NewGroupPage';
-import ChatPage from './features/chat/ChatPage';
+import ChatLayout from './components/layout/ChatLayout';
 import SettingsPage from './features/settings/SettingsPage';
 import AvatarPage from './features/settings/AvatarPage';
 import PrivacyPage from './features/legal/PrivacyPage';
@@ -251,20 +249,19 @@ export function App() {
           }
         />
 
-        {/* Protected Chat Routes */}
-        <Route
-          path="/chats"
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <ChatListPage />
-            </ProtectedRoute>
-          }
-        />
+        {/* Specific chat sub-routes — must come BEFORE the wildcard :chatId? pattern
+            so that /chats/new and /chats/new-group are matched as literal segments.
+            React Router v7 scores static segments higher than dynamic ones, but
+            ordering these first makes the intent explicit. */}
+
+        {/* /chats/new – routed through ChatLayout so the sidebar stays visible
+            on desktop. ChatLayout detects isNewChatRoute and renders NewChatContent
+            in the right pane. On mobile it fills the whole screen. */}
         <Route
           path="/chats/new"
           element={
             <ProtectedRoute user={user} loading={loading}>
-              <NewChatPage />
+              <ChatLayout />
             </ProtectedRoute>
           }
         />
@@ -276,11 +273,22 @@ export function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Protected Chat Routes */}
         <Route
-          path="/chats/:conversationId"
+          path="/chats/:chatId?"
           element={
             <ProtectedRoute user={user} loading={loading}>
-              <ChatPage />
+              <ChatLayout />
+            </ProtectedRoute>
+          }
+        />
+        {/* AI pane route — desktop renders AiChat in the right pane inside ChatLayout */}
+        <Route
+          path="/ai"
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <ChatLayout />
             </ProtectedRoute>
           }
         />

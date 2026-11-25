@@ -382,6 +382,12 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
+[functions.ai-chat]
+# Disable gateway JWT verification so unauthenticated CORS OPTIONS preflight
+# reaches the function and returns 204; user JWT is verified inside the function
+# for every non-OPTIONS request.
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { supabase as defaultClient } from './supabaseClient';
 import type { Database } from '../types/database';
 import type {
@@ -12,6 +12,9 @@ import type {
   MessageCursor,
   PaginatedMessages,
   UserProfilePreview,
+  AiQuota,
+  AiChatTurn,
+  AiChatResponse,
 } from '../types/api';
 
 /**
@@ -473,6 +476,10 @@ export async function updateLastSeen(
 /**
  * Subscribes to real-time incoming messages for the user.
  *
+ * Ref-counted: one module-level channel per userId is shared across all callers.
+ * The channel is created on the first subscriber and removed only when the last
+ * subscriber leaves. Each caller's returned cleanup removes only its own listeners.
+ *
  * IMPORTANT NOTE FOR UI BUILDERS:
  * Incoming realtime messages can duplicate the user's own optimistic sends and must
  * be de-duplicated by `clientId`.
@@ -484,6 +491,19 @@ export async function updateLastSeen(
  * The underlying transport (Postgres Changes) is encapsulated and may be swapped for
  * Broadcast in future scaling revisions without breaking this signature.
  */
+
+// One shared channel per userId, ref-counted across callers.
+type MessageListener = (message: Message) => void;
+
+interface UserSubscription {
+  channel: RealtimeChannel;
+  messageListeners: Set<MessageListener>;
+  resyncListeners: Set<() => void>;
+  refCount: number;
+}
+
+const userSubscriptions = new Map<string, UserSubscription>();
+
 export function subscribeToUserMessages(
   userId: string,
   onMessage: (message: Message) => void,
@@ -491,10 +511,17 @@ export function subscribeToUserMessages(
   client: SupabaseClient<Database> = defaultClient
 ): () => void {
   const channelName = `user-messages:${userId}`;
+  const ts = () => new Date().toISOString().split('T')[1].split('.')[0];
 
-  const channel = client
-    .channel(channelName)
-    .on(
+  // Get or create the shared subscription entry for this user.
+  let sub: UserSubscription;
+  const existing = userSubscriptions.get(userId);
+  if (!existing) {
+    console.log(`[${ts()}] [api] subscribeToUserMessages channel=${channelName} create`);
+
+    const channel = client.channel(channelName);
+
+    channel.on(
       'postgres_changes',
       {
         event: 'INSERT',
@@ -503,33 +530,80 @@ export function subscribeToUserMessages(
       },
       (payload) => {
         const raw = payload.new as Database['public']['Tables']['messages']['Row'];
-        if (raw) {
-          onMessage({
-            id: raw.id,
-            conversationId: raw.conversation_id,
-            senderId: raw.sender_id,
-            clientId: raw.client_id,
-            body: raw.body,
-            createdAt: raw.created_at,
-          });
+        if (!raw) return;
+        const message: Message = {
+          id: raw.id,
+          conversationId: raw.conversation_id,
+          senderId: raw.sender_id,
+          clientId: raw.client_id,
+          body: raw.body,
+          createdAt: raw.created_at,
+        };
+        // Fan out to all registered message listeners.
+        for (const listener of sub.messageListeners) {
+          try {
+            listener(message);
+          } catch {
+            // ignore listener errors
+          }
         }
       }
-    )
-    .subscribe((status) => {
+    );
+
+    channel.subscribe((status) => {
+      console.log(`[${ts()}] [api] channel ${channelName} status=${status}`);
       if (status === 'SUBSCRIBED') {
-        onResync?.();
+        console.log(`[${ts()}] [api] channel ${channelName} SUBSCRIBED -> calling onResync`);
+        for (const listener of sub.resyncListeners) {
+          try {
+            listener();
+          } catch {
+            // ignore listener errors
+          }
+        }
       }
     });
 
-  // Reconnection and gap-recovery event listeners
+    sub = {
+      channel,
+      messageListeners: new Set(),
+      resyncListeners: new Set(),
+      refCount: 0,
+    };
+    userSubscriptions.set(userId, sub);
+  } else {
+    sub = existing;
+    console.log(`[${ts()}] [api] subscribeToUserMessages channel=${channelName} reuse (refCount=${sub.refCount})`);
+  }
+
+  // Register this caller's listeners.
+  sub.messageListeners.add(onMessage);
+  if (onResync) sub.resyncListeners.add(onResync);
+  sub.refCount++;
+
+  // Reconnection and gap-recovery event listeners (document-level, shared per user).
   const handleVisibilityChange = () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-      onResync?.();
+      console.log(`[${ts()}] [api] channel ${channelName} visibilitychange -> calling onResync`);
+      for (const listener of sub.resyncListeners) {
+        try {
+          listener();
+        } catch {
+          // ignore listener errors
+        }
+      }
     }
   };
 
   const handleWindowFocus = () => {
-    onResync?.();
+    console.log(`[${ts()}] [api] channel ${channelName} window focus -> calling onResync`);
+    for (const listener of sub.resyncListeners) {
+      try {
+        listener();
+      } catch {
+        // ignore listener errors
+      }
+    }
   };
 
   if (typeof document !== 'undefined') {
@@ -539,16 +613,26 @@ export function subscribeToUserMessages(
     window.addEventListener('focus', handleWindowFocus);
   }
 
-  // Cleanup: removes listeners and unsubscribes channel
+  // Cleanup: removes this caller's listeners; closes the channel only when the last caller leaves.
   return () => {
+    console.log(`[${ts()}] [api] channel ${channelName} cleanup (refCount=${sub.refCount})`);
+    sub.messageListeners.delete(onMessage);
+    if (onResync) sub.resyncListeners.delete(onResync);
+    sub.refCount--;
+
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     }
     if (typeof window !== 'undefined') {
       window.removeEventListener('focus', handleWindowFocus);
     }
-    channel.unsubscribe();
-    client.removeChannel(channel);
+
+    if (sub.refCount <= 0) {
+      console.log(`[${ts()}] [api] channel ${channelName} last subscriber leaving -> unsubscribe`);
+      sub.channel.unsubscribe();
+      client.removeChannel(sub.channel);
+      userSubscriptions.delete(userId);
+    }
   };
 }
 
@@ -684,12 +768,14 @@ export function onAuthChange(
   client: SupabaseClient<Database> = defaultClient
 ): () => void {
   authListeners.add(callback);
+  const ts = () => new Date().toISOString().split('T')[1].split('.')[0];
 
   // Let Supabase's onAuthStateChange be the single source of truth.
   // It fires INITIAL_SESSION on subscribe, so we don't need a separate getCurrentUser call.
   const {
     data: { subscription },
   } = client.auth.onAuthStateChange(async (_event, session) => {
+    console.log(`[${ts()}] [api] onAuthChange event=${_event} user=${session?.user?.id ?? 'null'}`);
     if (session?.user) {
       // Fetch profile to build CurrentUser
       const res = await getCurrentUser(client);
@@ -1027,5 +1113,257 @@ export async function updateAvatarSeed(
     return { data: data as string, error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };
+  }
+}
+
+/**
+ * Fetches the current AI quota state for the authenticated user.
+ * Read-only; does not call Gemini.
+ */
+export async function getAiQuota(
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<AiQuota>> {
+  try {
+    type RpcFn = (name: string, params?: Record<string, unknown>) => unknown;
+    const rpc = client.rpc as RpcFn;
+    const { data, error } = await (rpc('get_ai_quota') as unknown as {
+      data: unknown;
+      error: unknown;
+    });
+    if (error) return { data: null, error: mapError(error) };
+    if (!data) {
+      return { data: null, error: mapError(new Error('UNKNOWN_ERROR')) };
+    }
+    const raw = Array.isArray(data) ? data[0] : data;
+    if (!raw) {
+      return { data: null, error: mapError(new Error('UNKNOWN_ERROR')) };
+    }
+    const row = raw as {
+      remaining_in_batch: number;
+      batch_size: number;
+      used_today: number;
+      daily_cap: number;
+      locked_until: string | null;
+      server_now: string;
+    };
+    return {
+      data: {
+        remainingInBatch: row.remaining_in_batch,
+        batchSize: row.batch_size,
+        usedToday: row.used_today,
+        dailyCap: row.daily_cap,
+        lockedUntil: row.locked_until,
+        serverNow: row.server_now,
+      },
+      error: null,
+    };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+
+/**
+ * Sends a prompt to the i-chat Supabase Edge Function (backed by Gemini).
+ */
+export async function sendAiPrompt(
+  prompt: string,
+  history: AiChatTurn[] = [],
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<AiChatResponse>> {
+  try {
+    const { data, error } = await client.functions.invoke('ai-chat', {
+      body: { prompt, history },
+    });
+
+    if (error) {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.json === 'function') {
+        try {
+          const body = (await ctx.json()) as {
+            error?: { code?: ApiError['code']; message?: string; details?: unknown };
+          };
+          if (body?.error?.code) {
+            return {
+              data: null,
+              error: {
+                code: body.error.code,
+                message: body.error.message || 'AI request failed.',
+                details: body.error.details,
+              },
+            };
+          }
+        } catch {
+          // ignore JSON parse failure on error body
+        }
+      }
+      return { data: null, error: mapError(error) };
+    }
+
+    const payload = data as {
+      data?: AiChatResponse;
+      error?: ApiError;
+    } | null;
+
+    if (payload?.error) {
+      return { data: null, error: payload.error };
+    }
+
+    if (!payload?.data?.reply) {
+      return {
+        data: null,
+        error: { code: 'OPERATION_FAILED', message: 'Empty AI response.' },
+      };
+    }
+
+    return { data: payload.data, error: null };
+  } catch (err) {
+    return { data: null, error: mapError(err) };
+  }
+}
+
+
+/**
+ * Stream an AI prompt response chunk by chunk using fetch + ReadableStream.
+ * Handles mid-character splits with TextDecoder({ stream: true }) and SSE lines.
+ */
+export async function streamAiPrompt({
+  prompt,
+  history = [],
+  onChunk,
+  onDone,
+  onError,
+  signal,
+  client = defaultClient,
+}: {
+  prompt: string;
+  history?: AiChatTurn[];
+  onChunk: (text: string) => void;
+  onDone: (quota: AiQuota | null) => void;
+  onError: (err: ApiError) => void;
+  signal?: AbortSignal;
+  client?: SupabaseClient<Database>;
+}): Promise<void> {
+  try {
+    const sessionRes = await client.auth.getSession();
+    const token = sessionRes.data.session?.access_token;
+    if (!token) {
+      onError({
+        code: 'UNAUTHENTICATED',
+        message: 'You must be signed in to talk to Thread AI.',
+      });
+      return;
+    }
+
+    const supabaseUrl =
+      (client as unknown as { supabaseUrl?: string }).supabaseUrl ||
+      import.meta.env.VITE_SUPABASE_URL;
+    const anonKey =
+      (client as unknown as { supabaseKey?: string }).supabaseKey ||
+      import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    const endpoint = `${supabaseUrl}/functions/v1/ai-chat`;
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        apikey: anonKey,
+      },
+      body: JSON.stringify({ prompt, history }),
+      signal,
+    });
+
+    if (!res.ok) {
+      let errBody: { error?: ApiError } | null = null;
+      try {
+        errBody = await res.json();
+      } catch {
+        // ignore
+      }
+      onError(
+        errBody?.error || {
+          code: 'OPERATION_FAILED',
+          message: `AI request failed with status ${res.status}.`,
+        }
+      );
+      return;
+    }
+
+    if (!res.body) {
+      onError({ code: 'OPERATION_FAILED', message: 'No response body stream received.' });
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let currentEvent = 'message';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        buffer += decoder.decode();
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? '';
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) {
+          currentEvent = 'message';
+          continue;
+        }
+
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim();
+          continue;
+        }
+
+        if (line.startsWith('data:')) {
+          const jsonStr = line.slice(5).trim();
+          try {
+            const data = JSON.parse(jsonStr);
+            if (currentEvent === 'done') {
+              onDone(data.quota || null);
+            } else if (currentEvent === 'error') {
+              onError({
+                code: data.code || 'OPERATION_FAILED',
+                message: data.message || 'Stream was interrupted.',
+              });
+            } else {
+              if (typeof data.text === 'string' && data.text.length > 0) {
+                onChunk(data.text);
+              }
+            }
+          } catch {
+            // Non-JSON SSE data
+          }
+        }
+      }
+    }
+
+    if (buffer.trim()) {
+      const line = buffer.trim();
+      if (line.startsWith('data:')) {
+        try {
+          const data = JSON.parse(line.slice(5).trim());
+          if (typeof data.text === 'string') {
+            onChunk(data.text);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch (err: unknown) {
+    if (signal?.aborted) {
+      return;
+    }
+    onError(mapError(err));
   }
 }

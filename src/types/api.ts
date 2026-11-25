@@ -86,3 +86,22 @@ export interface PaginatedMessages {
   nextCursor: MessageCursor | null;
   hasMore: boolean;
 }
+
+export interface AiQuota {
+  remainingInBatch: number;
+  batchSize: number;
+  usedToday: number;
+  dailyCap: number;
+  lockedUntil: string | null;
+  serverNow: string;
+}
+
+export interface AiChatTurn {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+export interface AiChatResponse {
+  reply: string;
+  quota: AiQuota | null;
+}

@@ -87,7 +87,7 @@ export const MessageStatus: FC<Props> = ({ state, onRetry }) => {
       viewBox="0 0 16 16"
       role="img"
       aria-label={ARIA.read}
-      className="text-[#047857] dark:text-[#6ee7b7]"
+      className="text-thread-read-tick-light dark:text-thread-read-tick-dark"
     >
       <path d="M1.5 8.5 L4.5 11.5 L10.5 5" fill="currentColor" />
       <path d="M5.5 8.5 L8.5 11.5 L14.5 5" fill="currentColor" />

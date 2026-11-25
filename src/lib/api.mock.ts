@@ -1,5 +1,9 @@
 import type {
+  ApiError,
   ApiResult,
+  AiQuota,
+  AiChatTurn,
+  AiChatResponse,
   BlockedUser,
   ConversationSummary,
   CurrentUser,
@@ -492,6 +496,74 @@ export async function updateAvatarSeed(): Promise<ApiResult<string>> { return { 
 export async function updateGroupDescription(): Promise<ApiResult<string>> {
   return { data: '', error: null };
 }
+export async function getAiQuota(): Promise<ApiResult<AiQuota>> {
+  await simulateLatency();
+  // Mock simulates a lock state: batch exhausted, cooldown active
+  return {
+    data: {
+      remainingInBatch: 0,
+      batchSize: 5,
+      usedToday: 10,
+      dailyCap: 10,
+      lockedUntil: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+      serverNow: new Date().toISOString(),
+    },
+    error: null,
+  };
+}
+
+export async function sendAiPrompt(
+  prompt: string,
+  _history: AiChatTurn[] = []
+): Promise<ApiResult<AiChatResponse>> {
+  await simulateLatency();
+  return {
+    data: {
+      reply: `Mock Thread AI response to: "${prompt.trim()}"`,
+      quota: {
+        remainingInBatch: 4,
+        batchSize: 5,
+        usedToday: 1,
+        dailyCap: 10,
+        lockedUntil: null,
+        serverNow: new Date().toISOString(),
+      },
+    },
+    error: null,
+  };
+}
+
+export async function streamAiPrompt({
+  prompt,
+  onChunk,
+  onDone,
+  signal,
+}: {
+  prompt: string;
+  history?: AiChatTurn[];
+  onChunk: (text: string) => void;
+  onDone: (quota: AiQuota | null) => void;
+  onError: (err: ApiError) => void;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const words = `Mock Thread AI response to: "${prompt.trim()}". Here is an explanation with math: $\\frac{3}{4}$.`.split(
+    ' '
+  );
+  for (const word of words) {
+    if (signal?.aborted) return;
+    await new Promise((r) => setTimeout(r, 60));
+    if (signal?.aborted) return;
+    onChunk(word + ' ');
+  }
+  onDone({
+    remainingInBatch: 4,
+    batchSize: 5,
+    usedToday: 1,
+    dailyCap: 10,
+    lockedUntil: null,
+    serverNow: new Date().toISOString(),
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Compile-time surface parity guard.
@@ -530,6 +602,9 @@ const _mockSurface = {
   setTyping,
   updateGroupDescription,
   updateAvatarSeed,
+  getAiQuota,
+  sendAiPrompt,
+  streamAiPrompt,
 } satisfies typeof RealApi;
 
 void _mockSurface;
