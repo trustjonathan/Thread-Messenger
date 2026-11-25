@@ -227,15 +227,9 @@ export function App() {
           }
         >
         <Routes>
-        {/* Root: signed-out visitors see the public landing page. */}
-        <Route
-          path="/"
-          element={
-            <GuestRoute user={user} loading={loading}>
-              <LandingPage />
-            </GuestRoute>
-          }
-        />
+        {/* The public website remains available at the root for every visitor. */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/app" element={<Navigate to="/chats" replace />} />
 
         {/* Invite link landing route */}
         <Route path="/invite/:code" element={<InvitePage />} />
