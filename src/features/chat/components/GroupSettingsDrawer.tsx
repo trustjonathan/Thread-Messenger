@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { X, Plus, Trash2, LogOut, AlertTriangle } from 'lucide-react';
-import { searchUsersByPrefix, getOrCreateDirectConversation } from '@/lib/apiClient';
+import { searchUserByUsername, getOrCreateDirectConversation } from '@/lib/apiClient';
 import { useNavigate } from 'react-router-dom';
 import type { UserProfilePreview } from '@/types/api';
 import { useGroupSettings } from '../hooks/useGroupSettings';
@@ -40,13 +40,14 @@ export function GroupSettingsDrawer({ conversationId, title, description, create
     setQuery(q);
     setSearchError(null);
     if (!q.trim()) { setResults([]); return; }
-    const res = await searchUsersByPrefix(q);
+    const clean = q.trim().replace(/^@/, '');
+    const res = await searchUserByUsername(clean);
     if (res.error) {
       setSearchError(res.error.message);
       setResults([]);
       return;
     }
-    setResults(res.data || []);
+    setResults(res.data ? [res.data] : []);
   };
 
   const doConfirm = async () => {

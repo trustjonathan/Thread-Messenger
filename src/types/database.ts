@@ -298,7 +298,7 @@ export type Database = {
           unread_count: number
         }[]
       }
-      add_group_members: { Args: { p_conversation_id: string; p_usernames: string[] }; Returns: number }
+      add_group_members: { Args: { p_conversation_id: string; p_usernames: string[] }; Returns: { username: string; status: string }[] }
       create_group: { Args: { p_title: string; p_member_usernames: string[] }; Returns: string }
       delete_group: { Args: { p_conversation_id: string }; Returns: undefined }
       leave_group: { Args: { p_conversation_id: string }; Returns: undefined }
