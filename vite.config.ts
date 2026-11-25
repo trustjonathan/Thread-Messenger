@@ -29,12 +29,12 @@ export default defineConfig(({ command, mode }) => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
         ...(useMock
           ? {
               '@/lib/apiClient': path.resolve(__dirname, './src/lib/api.mock.ts'),
             }
           : {}),
+        '@': path.resolve(__dirname, './src'),
       },
     },
   };

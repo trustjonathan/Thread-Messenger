@@ -25,13 +25,15 @@ const pwaOptions: Partial<VitePWAOptions> = {
     ],
   },
   workbox: {
-    // Cache app shell and static assets ONLY.
-    // NEVER cache API calls, realtime WebSocket, or message data.
     globPatterns: ['**/*.{js,css,html,ico,svg,png,woff2}'],
+    cleanupOutdatedCaches: true,
+    clientsClaim: true,
+    skipWaiting: true,
     runtimeCaching: [
       {
-        // App shell navigation — network-first with a 3 s timeout
-        urlPattern: /^\/(?!api|rest|realtime).*$/,
+        // App shell navigation is network-first. Public information routes
+        // must never be pinned by a stale service-worker cache.
+        urlPattern: /^\/(?!api|rest|realtime|auth|terms(?:\/|$)|privacy(?:\/|$)|help(?:\/|$)|contact(?:\/|$)).*$/,
         handler: 'NetworkFirst',
         options: {
           cacheName: 'app-shell',
@@ -41,8 +43,15 @@ const pwaOptions: Partial<VitePWAOptions> = {
       },
     ],
     navigateFallback: 'index.html',
-    // Never cache Supabase API or realtime
-    navigateFallbackDenylist: [/^\/rest/, /^\/realtime/, /^\/auth/],
+    navigateFallbackDenylist: [
+      /^\/rest/,
+      /^\/realtime/,
+      /^\/auth/,
+      /^\/terms(?:\/|$)/,
+      /^\/privacy(?:\/|$)/,
+      /^\/help(?:\/|$)/,
+      /^\/contact(?:\/|$)/,
+    ],
   },
   devOptions: {
     enabled: false,
