@@ -6,32 +6,42 @@ const BASE_ALLOWED_HEADERS =
   'authorization, content-type, apikey, x-client-info, x-supabase-api-version';
 const ALLOWED_METHODS = 'POST, OPTIONS';
 
-const PROD_ORIGINS = [
+const DEFAULT_ALLOWED_ORIGINS = [
   'https://thread-messenger.onrender.com',
-  'https://thread-messenger-staging.onrender.com',
 ];
 
-const NON_PROD_ORIGINS = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'https://nkzgtsbm-5173.eun1.devtunnels.ms',
-];
+export function normalizeExactOrigin(raw: string): string | null {
+  const trimmed = raw.trim().replace(/\/+$/, '');
+  if (!trimmed || trimmed.includes('*')) {
+    return null;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    if (parsed.pathname !== '/' || parsed.search || parsed.hash) {
+      return null;
+    }
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
 
 export function getAllowedOrigins(env: {
-  ENVIRONMENT?: string;
   ALLOWED_ORIGINS?: string;
 }): Set<string> {
-  const isProd = env.ENVIRONMENT === 'production';
-  const extra = (env.ALLOWED_ORIGINS ?? '')
+  const configured = (env.ALLOWED_ORIGINS ?? '')
     .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean);
+    .map(normalizeExactOrigin)
+    .filter((o): o is string => Boolean(o));
 
-  return new Set([
-    ...PROD_ORIGINS,
-    ...(isProd ? [] : NON_PROD_ORIGINS),
-    ...extra,
-  ]);
+  if (configured.length > 0) {
+    return new Set(configured);
+  }
+
+  return new Set(DEFAULT_ALLOWED_ORIGINS);
 }
 
 export function buildCorsHeaders(
@@ -44,8 +54,9 @@ export function buildCorsHeaders(
     Vary: 'Origin',
   };
 
-  if (origin && allowedOrigins.has(origin)) {
-    headers['Access-Control-Allow-Origin'] = origin;
+  const normalized = origin ? normalizeExactOrigin(origin) : null;
+  if (normalized && allowedOrigins.has(normalized)) {
+    headers['Access-Control-Allow-Origin'] = normalized;
   }
 
   return headers;
@@ -168,7 +179,6 @@ export async function handleAiChatRequest(
 ): Promise<Response> {
   const origin = req.headers.get('Origin');
   const allowedOrigins = getAllowedOrigins({
-    ENVIRONMENT: deps.getEnv('ENVIRONMENT'),
     ALLOWED_ORIGINS: deps.getEnv('ALLOWED_ORIGINS'),
   });
   const corsHeaders = buildCorsHeaders(origin, allowedOrigins);

@@ -46,7 +46,8 @@ function makeGeminiSseResponse(chunks: string[], failAfterFirst = false): Respon
 function makeDeps(overrides: Partial<AiChatDeps> = {}): AiChatDeps {
   const env: Record<string, string | undefined> = {
     GEMINI_API_KEY: 'test-key',
-    ENVIRONMENT: 'development',
+    ALLOWED_ORIGINS:
+      'https://thread-messenger.onrender.com,https://thread-messenger-staging.onrender.com,http://localhost:5173,https://nkzgtsbm-5173.eun1.devtunnels.ms',
   };
   return {
     getEnv: (k) => env[k],
@@ -67,72 +68,108 @@ function makeDeps(overrides: Partial<AiChatDeps> = {}): AiChatDeps {
 }
 
 describe('ai-chat Edge Function CORS & Auth', () => {
-  it('OPTIONS returns 204 with CORS headers for allowed dev-tunnel origin in non-prod', async () => {
-    const req = new Request('https://example.supabase.co/functions/v1/ai-chat', {
-      method: 'OPTIONS',
-      headers: { Origin: 'https://nkzgtsbm-5173.eun1.devtunnels.ms' },
-    });
+  it('OPTIONS returns 204 with CORS headers for allowed staging, production, localhost, and dev-tunnel origins from ALLOWED_ORIGINS', async () => {
+    const origins = [
+      'https://thread-messenger.onrender.com',
+      'https://thread-messenger-staging.onrender.com',
+      'http://localhost:5173',
+      'https://nkzgtsbm-5173.eun1.devtunnels.ms',
+    ];
 
-    const res = await handleAiChatRequest(req, makeDeps());
-    expect(res.status).toBe(204);
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(
-      'https://nkzgtsbm-5173.eun1.devtunnels.ms'
-    );
-    expect(res.headers.get('Access-Control-Allow-Methods')).toBe('POST, OPTIONS');
-    expect(res.headers.get('Access-Control-Allow-Headers')).toContain(
-      'x-supabase-api-version'
-    );
-    expect(res.headers.get('Access-Control-Allow-Headers')).toContain('authorization');
+    for (const origin of origins) {
+      const req = new Request('https://example.supabase.co/functions/v1/ai-chat', {
+        method: 'OPTIONS',
+        headers: { Origin: origin },
+      });
+
+      const res = await handleAiChatRequest(req, makeDeps());
+      expect(res.status).toBe(204);
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe(origin);
+      expect(res.headers.get('Vary')).toBe('Origin');
+      expect(res.headers.get('Access-Control-Allow-Methods')).toBe('POST, OPTIONS');
+      expect(res.headers.get('Access-Control-Allow-Headers')).toContain(
+        'x-supabase-api-version'
+      );
+      expect(res.headers.get('Access-Control-Allow-Headers')).toContain('authorization');
+    }
   });
 
-  it('OPTIONS returns 204 with CORS headers for thread-messenger-staging.onrender.com even in production', async () => {
-    const req = new Request('https://example.supabase.co/functions/v1/ai-chat', {
-      method: 'OPTIONS',
-      headers: { Origin: 'https://thread-messenger-staging.onrender.com' },
+  it('ignores trailing slashes and rejects wildcard patterns in ALLOWED_ORIGINS', async () => {
+    const deps = makeDeps({
+      getEnv: (k) => {
+        if (k === 'ALLOWED_ORIGINS') {
+          return 'https://thread-messenger-staging.onrender.com/, https://*.onrender.com, *';
+        }
+        return 'test-key';
+      },
     });
 
-    const res = await handleAiChatRequest(
-      req,
-      makeDeps({
-        getEnv: (k) => (k === 'ENVIRONMENT' ? 'production' : 'test-key'),
-      })
-    );
-    expect(res.status).toBe(204);
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(
+    const stagingReq = new Request('https://example.supabase.co/functions/v1/ai-chat', {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://thread-messenger-staging.onrender.com/' },
+    });
+    const stagingRes = await handleAiChatRequest(stagingReq, deps);
+    expect(stagingRes.status).toBe(204);
+    expect(stagingRes.headers.get('Access-Control-Allow-Origin')).toBe(
       'https://thread-messenger-staging.onrender.com'
     );
+
+    const wildcardReq = new Request('https://example.supabase.co/functions/v1/ai-chat', {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://other-app.onrender.com' },
+    });
+    const wildcardRes = await handleAiChatRequest(wildcardReq, deps);
+    expect(wildcardRes.status).toBe(204);
+    expect(wildcardRes.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(wildcardRes.headers.get('Vary')).toBe('Origin');
   });
 
-  it('OPTIONS returns 204 with NO Access-Control-Allow-Origin for a disallowed origin', async () => {
+  it('defaults to production origin only when ALLOWED_ORIGINS is missing', async () => {
+    const deps = makeDeps({
+      getEnv: (k) => (k === 'GEMINI_API_KEY' ? 'test-key' : undefined),
+    });
+
+    const prodRes = await handleAiChatRequest(
+      new Request('https://example.supabase.co/functions/v1/ai-chat', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://thread-messenger.onrender.com' },
+      }),
+      deps
+    );
+    expect(prodRes.status).toBe(204);
+    expect(prodRes.headers.get('Access-Control-Allow-Origin')).toBe(
+      'https://thread-messenger.onrender.com'
+    );
+
+    const stagingRes = await handleAiChatRequest(
+      new Request('https://example.supabase.co/functions/v1/ai-chat', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://thread-messenger-staging.onrender.com' },
+      }),
+      deps
+    );
+    expect(stagingRes.status).toBe(204);
+    expect(stagingRes.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(stagingRes.headers.get('Vary')).toBe('Origin');
+  });
+
+  it('OPTIONS returns 204 with Vary: Origin and NO Access-Control-Allow-Origin for https://evil.example', async () => {
     const req = new Request('https://example.supabase.co/functions/v1/ai-chat', {
       method: 'OPTIONS',
-      headers: { Origin: 'https://evil.example.com' },
+      headers: { Origin: 'https://evil.example' },
     });
 
     const res = await handleAiChatRequest(req, makeDeps());
     expect(res.status).toBe(204);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(res.headers.get('Vary')).toBe('Origin');
   });
 
-  it('OPTIONS omits Access-Control-Allow-Origin for dev-tunnel when ENVIRONMENT=production', async () => {
-    const req = new Request('https://example.supabase.co/functions/v1/ai-chat', {
-      method: 'OPTIONS',
-      headers: { Origin: 'https://nkzgtsbm-5173.eun1.devtunnels.ms' },
-    });
-
-    const deps = makeDeps({
-      getEnv: (k) => (k === 'ENVIRONMENT' ? 'production' : 'test-key'),
-    });
-    const res = await handleAiChatRequest(req, deps);
-    expect(res.status).toBe(204);
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
-  });
-
-  it('POST without a token returns 401 with CORS headers', async () => {
+  it('POST without a token returns 401 with CORS headers for allowed origin', async () => {
     const req = new Request('https://example.supabase.co/functions/v1/ai-chat', {
       method: 'POST',
       headers: {
-        Origin: 'http://localhost:5173',
+        Origin: 'https://thread-messenger-staging.onrender.com',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ prompt: 'Hello' }),
@@ -140,7 +177,10 @@ describe('ai-chat Edge Function CORS & Auth', () => {
 
     const res = await handleAiChatRequest(req, makeDeps());
     expect(res.status).toBe(401);
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(
+      'https://thread-messenger-staging.onrender.com'
+    );
+    expect(res.headers.get('Vary')).toBe('Origin');
     const json = await res.json();
     expect(json.error.code).toBe('UNAUTHENTICATED');
   });
