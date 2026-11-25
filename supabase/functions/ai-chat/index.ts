@@ -8,6 +8,7 @@ const ALLOWED_METHODS = 'POST, OPTIONS';
 
 const PROD_ORIGINS = [
   'https://thread-messenger.onrender.com',
+  'https://thread-messenger-staging.onrender.com',
 ];
 
 const NON_PROD_ORIGINS = [

@@ -85,6 +85,24 @@ describe('ai-chat Edge Function CORS & Auth', () => {
     expect(res.headers.get('Access-Control-Allow-Headers')).toContain('authorization');
   });
 
+  it('OPTIONS returns 204 with CORS headers for thread-messenger-staging.onrender.com even in production', async () => {
+    const req = new Request('https://example.supabase.co/functions/v1/ai-chat', {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://thread-messenger-staging.onrender.com' },
+    });
+
+    const res = await handleAiChatRequest(
+      req,
+      makeDeps({
+        getEnv: (k) => (k === 'ENVIRONMENT' ? 'production' : 'test-key'),
+      })
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(
+      'https://thread-messenger-staging.onrender.com'
+    );
+  });
+
   it('OPTIONS returns 204 with NO Access-Control-Allow-Origin for a disallowed origin', async () => {
     const req = new Request('https://example.supabase.co/functions/v1/ai-chat', {
       method: 'OPTIONS',
