@@ -551,6 +551,12 @@ let profileChannel: RealtimeChannel | null = null;
 function getProfileChannel(client: SupabaseClient<Database>): RealtimeChannel {
   if (!profileChannel) {
     profileChannel = client.channel('profile_changes');
+    profileChannel.on('broadcast', { event: 'avatar_changed' }, (payload) => {
+      const data = (payload as unknown) as { user_id?: string; avatar_seed?: string | null };
+      if (data.user_id) {
+        emitProfileChange(data.user_id, data.avatar_seed ?? null);
+      }
+    });
     profileChannel.subscribe();
   }
   return profileChannel;

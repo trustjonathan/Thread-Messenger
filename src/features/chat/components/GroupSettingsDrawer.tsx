@@ -27,6 +27,7 @@ export function GroupSettingsDrawer({ conversationId, title, description, create
   const [desc, setDesc] = useState(description || '');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<UserProfilePreview[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const addMemberFocus = useCallback(() => {
@@ -37,8 +38,14 @@ export function GroupSettingsDrawer({ conversationId, title, description, create
 
   const search = async (q: string) => {
     setQuery(q);
+    setSearchError(null);
     if (!q.trim()) { setResults([]); return; }
     const res = await searchUsersByPrefix(q);
+    if (res.error) {
+      setSearchError(res.error.message);
+      setResults([]);
+      return;
+    }
     setResults(res.data || []);
   };
 
@@ -107,6 +114,12 @@ export function GroupSettingsDrawer({ conversationId, title, description, create
                   </button>
                 ))}
               </div>
+            )}
+            {searchError && (
+              <p className="text-xs text-red-500">{searchError}</p>
+            )}
+            {query.trim().length > 0 && results.length === 0 && !searchError && (
+              <p className="text-xs text-slate-500">No users found</p>
             )}
           </div>
         )}
