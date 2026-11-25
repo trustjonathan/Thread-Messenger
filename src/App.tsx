@@ -7,20 +7,20 @@ import {
   useLocation,
 } from 'react-router-dom';
 import { onAuthChange, updateLastSeen } from '@/lib/apiClient';
+import { getPendingInviteCode } from '@/lib/inviteStorage';
 import type { CurrentUser } from '@/types/api';
 
 // Pages
 import LandingPage from './features/landing/LandingPage';
 import SignInPage from './features/auth/SignInPage';
 import ChooseUsernamePage from './features/auth/ChooseUsernamePage';
-import ChatListPage from './features/chat/ChatListPage';
-import NewChatPage from './features/chat/NewChatPage';
 import NewGroupPage from './features/chat/NewGroupPage';
-import ChatPage from './features/chat/ChatPage';
+import ChatLayout from './components/layout/ChatLayout';
 import SettingsPage from './features/settings/SettingsPage';
 import AvatarPage from './features/settings/AvatarPage';
 import PrivacyPage from './features/legal/PrivacyPage';
 import TermsPage from './features/legal/TermsPage';
+import InviteLandingPage from './features/invite/InviteLandingPage';
 
 // Context
 import { AvatarOverrideProvider } from '@/lib/avatarOverride';
@@ -64,6 +64,11 @@ function RootRoute({
 
   if (!user.usernameSet) {
     return <Navigate to="/choose-username" replace />;
+  }
+
+  const pendingInvite = getPendingInviteCode();
+  if (pendingInvite) {
+    return <Navigate to={`/invite/${encodeURIComponent(pendingInvite)}`} replace />;
   }
 
   return <Navigate to="/chats" replace />;
@@ -121,6 +126,10 @@ function GuestRoute({
   if (user) {
     if (!user.usernameSet) {
       return <Navigate to="/choose-username" replace />;
+    }
+    const pendingInvite = getPendingInviteCode();
+    if (pendingInvite) {
+      return <Navigate to={`/invite/${encodeURIComponent(pendingInvite)}`} replace />;
     }
     return <Navigate to="/chats" replace />;
   }
@@ -228,6 +237,9 @@ export function App() {
         {/* Root Route: signed-out -> /signin; signed-in -> /chats or /choose-username */}
         <Route path="/" element={<RootRoute user={user} loading={loading} />} />
 
+        {/* Invite link landing route */}
+        <Route path="/invite/:code" element={<InviteLandingPage />} />
+
         {/* Public Landing Page */}
         <Route path="/landing" element={<LandingPage />} />
 
@@ -251,20 +263,19 @@ export function App() {
           }
         />
 
-        {/* Protected Chat Routes */}
-        <Route
-          path="/chats"
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <ChatListPage />
-            </ProtectedRoute>
-          }
-        />
+        {/* Specific chat sub-routes — must come BEFORE the wildcard :chatId? pattern
+            so that /chats/new and /chats/new-group are matched as literal segments.
+            React Router v7 scores static segments higher than dynamic ones, but
+            ordering these first makes the intent explicit. */}
+
+        {/* /chats/new – routed through ChatLayout so the sidebar stays visible
+            on desktop. ChatLayout detects isNewChatRoute and renders NewChatContent
+            in the right pane. On mobile it fills the whole screen. */}
         <Route
           path="/chats/new"
           element={
             <ProtectedRoute user={user} loading={loading}>
-              <NewChatPage />
+              <ChatLayout />
             </ProtectedRoute>
           }
         />
@@ -276,11 +287,22 @@ export function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Protected Chat Routes */}
         <Route
-          path="/chats/:conversationId"
+          path="/chats/:chatId?"
           element={
             <ProtectedRoute user={user} loading={loading}>
-              <ChatPage />
+              <ChatLayout />
+            </ProtectedRoute>
+          }
+        />
+        {/* AI pane route — desktop renders AiChat in the right pane inside ChatLayout */}
+        <Route
+          path="/ai"
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <ChatLayout />
             </ProtectedRoute>
           }
         />

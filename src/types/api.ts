@@ -10,7 +10,8 @@ export type ApiErrorCode =
   | 'NETWORK_ERROR'
   | 'UNKNOWN_ERROR'
   | 'GROUP_FULL'
-  | 'NOT_ALLOWED';
+  | 'NOT_ALLOWED'
+  | 'INVALID_INVITE';
 
 export interface ApiError {
   code: ApiErrorCode;
@@ -86,3 +87,29 @@ export interface PaginatedMessages {
   nextCursor: MessageCursor | null;
   hasMore: boolean;
 }
+
+export interface AiQuota {
+  remainingInBatch: number;
+  batchSize: number;
+  usedToday: number;
+  dailyCap: number;
+  lockedUntil: string | null;
+  serverNow: string;
+}
+
+export interface AiChatTurn {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+export interface AiChatResponse {
+  reply: string;
+  quota: AiQuota | null;
+}
+
+export interface ResolvedInvite {
+  username: string;
+  displayName: string;
+  avatarSeed?: string | null;
+}
+

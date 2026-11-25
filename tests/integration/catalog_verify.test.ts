@@ -21,4 +21,33 @@ describe('Catalog verification (local DB mirrors hosted)', () => {
     });
     expect(error).not.toBeNull();
   });
+
+  it('anon cannot execute get_my_invite_code', async () => {
+    anon = createTestClient();
+    const { error } = await (anon as unknown as { rpc: (fn: string) => Promise<{ error: unknown }> }).rpc('get_my_invite_code');
+    expect(error).not.toBeNull();
+  });
+
+  it('anon cannot execute regenerate_invite_code', async () => {
+    anon = createTestClient();
+    const { error } = await (anon as unknown as { rpc: (fn: string) => Promise<{ error: unknown }> }).rpc('regenerate_invite_code');
+    expect(error).not.toBeNull();
+  });
+
+  it('anon cannot execute redeem_invite', async () => {
+    anon = createTestClient();
+    const { error } = await (anon as unknown as { rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: unknown }> }).rpc('redeem_invite', {
+      p_code: 'abc123def456',
+    });
+    expect(error).not.toBeNull();
+  });
+
+  it('anon CAN call resolve_invite (returns empty result rather than permission denied)', async () => {
+    anon = createTestClient();
+    const { data, error } = await (anon as unknown as { rpc: (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> }).rpc('resolve_invite', {
+      p_code: 'abc123def456',
+    });
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+  });
 });

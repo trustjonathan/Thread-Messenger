@@ -27,7 +27,9 @@ import {
   Bell,
   BellOff,
   ArrowLeft,
+  UserPlus,
 } from 'lucide-react';
+import { InviteFriendsModal } from '@/features/chat/components/InviteFriendsModal';
 
 type PageState = 'loading' | 'ready' | 'error';
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -68,6 +70,7 @@ export default function SettingsPage() {
 
   // ── Sign out state ───────────────────────────────────────────────
   const [signingOut, setSigningOut] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [avatarSeed, setAvatarSeed] = useState('');
 
   // ── Load user ────────────────────────────────────────────────────
@@ -422,6 +425,28 @@ export default function SettingsPage() {
           )}
         </section>
 
+        {/* ── Invite Friends ────────────────────────────────────── */}
+        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Invite friends
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Share your personal link to chat with friends on Thread.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsInviteModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors min-h-[44px]"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>Invite</span>
+            </button>
+          </div>
+        </section>
+
         {/* ── Legal Links ───────────────────────────────────────── */}
         <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm divide-y divide-slate-100 dark:divide-slate-800">
           <Link
@@ -455,6 +480,7 @@ export default function SettingsPage() {
           {signingOut ? 'Signing out…' : 'Sign out'}
         </button>
       </div>
+      <InviteFriendsModal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} />
     </main>
   );
 }

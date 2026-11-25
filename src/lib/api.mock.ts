@@ -1,5 +1,9 @@
 import type {
+  ApiError,
   ApiResult,
+  AiQuota,
+  AiChatTurn,
+  AiChatResponse,
   BlockedUser,
   ConversationSummary,
   CurrentUser,
@@ -7,6 +11,7 @@ import type {
   MessageCursor,
   PaginatedMessages,
   UserProfilePreview,
+  ResolvedInvite,
 } from '../types/api';
 import { mapError, newClientId } from './api';
 import type * as RealApi from './api';
@@ -32,6 +37,7 @@ interface MockStore {
   }[];
   messages: Message[];
   blocks: Set<string>;
+  inviteCodes: Map<string, string>;
 }
 
 const mockStore: MockStore = {
@@ -97,6 +103,10 @@ const mockStore: MockStore = {
     },
   ],
   blocks: new Set<string>(),
+  inviteCodes: new Map<string, string>([
+    ['11111111-1111-1111-1111-111111111111', 'mockcode1234'],
+    ['22222222-2222-2222-2222-222222222222', 'alicecode5678'],
+  ]),
 };
 
 export async function searchUserByUsername(
@@ -344,6 +354,70 @@ export function subscribeToUserMessages(
   };
 }
 
+
+export async function getMyInviteCode(): Promise<ApiResult<string>> {
+  await simulateLatency();
+  const uid = mockStore.currentUserId;
+  let code = mockStore.inviteCodes.get(uid);
+  if (!code) {
+    code = 'mockcode' + Math.random().toString(36).substring(2, 8);
+    mockStore.inviteCodes.set(uid, code);
+  }
+  return { data: code, error: null };
+}
+
+export async function regenerateInviteCode(): Promise<ApiResult<string>> {
+  await simulateLatency();
+  const uid = mockStore.currentUserId;
+  const newCode = 'regen' + Math.random().toString(36).substring(2, 9);
+  mockStore.inviteCodes.set(uid, newCode);
+  return { data: newCode, error: null };
+}
+
+export async function resolveInvite(code: string): Promise<ApiResult<ResolvedInvite>> {
+  await simulateLatency();
+  const clean = code.trim();
+  for (const [uid, userCode] of mockStore.inviteCodes.entries()) {
+    if (userCode === clean) {
+      const user = mockStore.users.find((u) => u.id === uid);
+      if (user) {
+        return {
+          data: {
+            username: user.username,
+            displayName: user.displayName,
+            avatarSeed: user.avatarSeed ?? null,
+          },
+          error: null,
+        };
+      }
+    }
+  }
+  return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
+}
+
+export async function redeemInvite(code: string): Promise<ApiResult<string>> {
+  await simulateLatency();
+  const clean = code.trim();
+  const callerId = mockStore.currentUserId;
+  for (const [uid, userCode] of mockStore.inviteCodes.entries()) {
+    if (userCode === clean) {
+      if (uid === callerId) {
+        return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
+      }
+      const pair1 = callerId + ':' + uid;
+      const pair2 = uid + ':' + callerId;
+      if (mockStore.blocks.has(pair1) || mockStore.blocks.has(pair2)) {
+        return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
+      }
+      const user = mockStore.users.find((u) => u.id === uid);
+      if (user) {
+        return { data: user.username, error: null };
+      }
+    }
+  }
+  return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
+}
+
 // ---------------------------------------------------------------------------
 // Mock Authentication & User Management (REQ-AUTH-01)
 // ---------------------------------------------------------------------------
@@ -492,6 +566,74 @@ export async function updateAvatarSeed(): Promise<ApiResult<string>> { return { 
 export async function updateGroupDescription(): Promise<ApiResult<string>> {
   return { data: '', error: null };
 }
+export async function getAiQuota(): Promise<ApiResult<AiQuota>> {
+  await simulateLatency();
+  // Mock simulates a lock state: batch exhausted, cooldown active
+  return {
+    data: {
+      remainingInBatch: 0,
+      batchSize: 5,
+      usedToday: 10,
+      dailyCap: 10,
+      lockedUntil: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+      serverNow: new Date().toISOString(),
+    },
+    error: null,
+  };
+}
+
+export async function sendAiPrompt(
+  prompt: string,
+  _history: AiChatTurn[] = []
+): Promise<ApiResult<AiChatResponse>> {
+  await simulateLatency();
+  return {
+    data: {
+      reply: `Mock Thread AI response to: "${prompt.trim()}"`,
+      quota: {
+        remainingInBatch: 4,
+        batchSize: 5,
+        usedToday: 1,
+        dailyCap: 10,
+        lockedUntil: null,
+        serverNow: new Date().toISOString(),
+      },
+    },
+    error: null,
+  };
+}
+
+export async function streamAiPrompt({
+  prompt,
+  onChunk,
+  onDone,
+  signal,
+}: {
+  prompt: string;
+  history?: AiChatTurn[];
+  onChunk: (text: string) => void;
+  onDone: (quota: AiQuota | null) => void;
+  onError: (err: ApiError) => void;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const words = `Mock Thread AI response to: "${prompt.trim()}". Here is an explanation with math: $\\frac{3}{4}$.`.split(
+    ' '
+  );
+  for (const word of words) {
+    if (signal?.aborted) return;
+    await new Promise((r) => setTimeout(r, 60));
+    if (signal?.aborted) return;
+    onChunk(word + ' ');
+  }
+  onDone({
+    remainingInBatch: 4,
+    batchSize: 5,
+    usedToday: 1,
+    dailyCap: 10,
+    lockedUntil: null,
+    serverNow: new Date().toISOString(),
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Compile-time surface parity guard.
@@ -530,6 +672,13 @@ const _mockSurface = {
   setTyping,
   updateGroupDescription,
   updateAvatarSeed,
+  getAiQuota,
+  sendAiPrompt,
+  streamAiPrompt,
+  getMyInviteCode,
+  regenerateInviteCode,
+  resolveInvite,
+  redeemInvite,
 } satisfies typeof RealApi;
 
 void _mockSurface;
