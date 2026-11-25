@@ -1,5 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import { subscribeToProfileChanges } from '@/lib/api';
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 
 interface AvatarOverrideContextType {
   avatarSeedOverrides: Record<string, string | null>;
@@ -25,13 +24,6 @@ export function AvatarOverrideProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
-
-  useEffect(() => {
-    const unsubscribe = subscribeToProfileChanges((userId, avatarSeed) => {
-      setAvatarSeedOverride(userId, avatarSeed);
-    });
-    return unsubscribe;
-  }, [setAvatarSeedOverride]);
 
   return (
     <AvatarOverrideContext.Provider value={{ avatarSeedOverrides, setAvatarSeedOverride }}>

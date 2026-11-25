@@ -1,4 +1,4 @@
-import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as defaultClient } from './supabaseClient';
 import type { Database } from '../types/database';
 import type {
@@ -47,6 +47,20 @@ export function mapError(err: unknown): ApiError {
     return {
       code: 'OPERATION_FAILED',
       message: 'The requested operation could not be completed.',
+      details: err,
+    };
+  }
+  if (msg.includes('GROUP_FULL')) {
+    return {
+      code: 'GROUP_FULL',
+      message: 'This group is full (max 20 members).',
+      details: err,
+    };
+  }
+  if (msg.includes('NOT_ALLOWED')) {
+    return {
+      code: 'NOT_ALLOWED',
+      message: 'Only the group creator can add members.',
       details: err,
     };
   }
@@ -544,57 +558,6 @@ export function subscribeToUserMessages(
 
 const authListeners = new Set<(user: CurrentUser | null) => void>();
 
-// ── Profile change broadcast (cross-client avatar propagation) ─────────────
-const profileChangeListeners = new Set<(userId: string, avatarSeed: string | null) => void>();
-let profileChannel: RealtimeChannel | null = null;
-
-function getProfileChannel(client: SupabaseClient<Database>): RealtimeChannel {
-  if (!profileChannel) {
-    profileChannel = client.channel('profile_changes');
-    profileChannel.on('broadcast', { event: 'avatar_changed' }, (payload) => {
-      const data = (payload as unknown) as { user_id?: string; avatar_seed?: string | null };
-      if (data.user_id) {
-        emitProfileChange(data.user_id, data.avatar_seed ?? null);
-      }
-    });
-    profileChannel.subscribe();
-  }
-  return profileChannel;
-}
-
-export function subscribeToProfileChanges(
-  listener: (userId: string, avatarSeed: string | null) => void,
-  client: SupabaseClient<Database> = defaultClient
-): () => void {
-  profileChangeListeners.add(listener);
-  getProfileChannel(client);
-  return () => {
-    profileChangeListeners.delete(listener);
-  };
-}
-
-function broadcastProfileChange(userId: string, avatarSeed: string | null, client: SupabaseClient<Database>): void {
-  try {
-    getProfileChannel(client).send({
-      type: 'broadcast',
-      event: 'avatar_changed',
-      payload: { user_id: userId, avatar_seed: avatarSeed },
-    });
-  } catch {
-    // broadcast best-effort; profile still saved in DB
-  }
-}
-
-function emitProfileChange(userId: string, avatarSeed: string | null): void {
-  for (const listener of profileChangeListeners) {
-    try {
-      listener(userId, avatarSeed);
-    } catch {
-      // ignore
-    }
-  }
-}
-
 async function emitAuthChange(client: SupabaseClient<Database> = defaultClient): Promise<void> {
   const res = await getCurrentUser(client);
   for (const listener of authListeners) {
@@ -878,14 +841,21 @@ export async function addGroupMembers(
   conversationId: string,
   usernames: string[],
   client: SupabaseClient<Database> = defaultClient
-): Promise<ApiResult<number>> {
+): Promise<ApiResult<Array<{ username: string; status: string }>>> {
   try {
     const { data, error } = await client.rpc('add_group_members', {
       p_conversation_id: conversationId,
       p_usernames: usernames,
     });
     if (error) return { data: null, error: mapError(error) };
-    return { data: Number(data ?? 0), error: null };
+    const raw = (data ?? []) as unknown as Array<{ out_username: string; out_status: string }>;
+    return {
+      data: raw.map((r) => ({
+        username: r.out_username,
+        status: r.out_status,
+      })) as Array<{ username: string; status: string }>,
+      error: null,
+    };
   } catch (err) {
     return { data: null, error: mapError(err) };
   }
@@ -1054,11 +1024,6 @@ export async function updateAvatarSeed(
     const { data, error } = await client.rpc('update_avatar_seed', { p_seed: seed });
     if (error) return { data: null, error: mapError(error) };
     emitAuthChange(client);
-    const user = (await getCurrentUser(client)).data;
-    if (user) {
-      broadcastProfileChange(user.id, seed, client);
-      emitProfileChange(user.id, seed);
-    }
     return { data: data as string, error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };

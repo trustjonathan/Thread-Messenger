@@ -43,9 +43,15 @@ export function useGroupSettings(conversationId: string | undefined, enabled: bo
   const add = async (usernames: string[]) => {
     if (!conversationId) return false;
     const res = await addGroupMembers(conversationId, usernames);
-    if (res.error) setError(res.error.message);
-    else { setError(null); await refresh(); }
-    return !res.error;
+    if (res.error) { setError(res.error.message); return false; }
+    const results = res.data || [];
+    const hasFull = results.some((r) => r.status === 'group_full');
+    const hasNotAllowed = results.some((r) => r.status === 'not_allowed');
+    if (hasFull) { setError('This group is full (max 20 members).'); return false; }
+    if (hasNotAllowed) { setError('Only the group creator can add members.'); return false; }
+    const anyAdded = results.some((r) => r.status === 'added');
+    if (anyAdded) { setError(null); await refresh(); }
+    return true;
   };
 
   const remove = async (userId: string) => {

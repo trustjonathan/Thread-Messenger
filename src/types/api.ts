@@ -8,7 +8,9 @@ export type ApiErrorCode =
   | 'USERNAME_RESERVED'
   | 'VALIDATION_ERROR'
   | 'NETWORK_ERROR'
-  | 'UNKNOWN_ERROR';
+  | 'UNKNOWN_ERROR'
+  | 'GROUP_FULL'
+  | 'NOT_ALLOWED';
 
 export interface ApiError {
   code: ApiErrorCode;

@@ -461,7 +461,7 @@ export async function createGroup(): Promise<ApiResult<string>> {
   await simulateLatency();
   return { data: null, error: { code: 'OPERATION_FAILED', message: 'Not implemented in mock' } };
 }
-export async function addGroupMembers(): Promise<ApiResult<number>> {
+export async function addGroupMembers(): Promise<ApiResult<Array<{ username: string; status: string }>>> {
   return { data: null, error: { code: 'OPERATION_FAILED', message: 'Not implemented in mock' } };
 }
 export async function removeGroupMember(): Promise<ApiResult<void>> {
@@ -489,7 +489,6 @@ export async function setTyping(): Promise<ApiResult<void>> {
   return { data: undefined, error: null };
 }
 export async function updateAvatarSeed(): Promise<ApiResult<string>> { return { data: '', error: null }; }
-export function subscribeToProfileChanges(): () => void { return () => {}; }
 export async function updateGroupDescription(): Promise<ApiResult<string>> {
   return { data: '', error: null };
 }
@@ -531,7 +530,6 @@ const _mockSurface = {
   setTyping,
   updateGroupDescription,
   updateAvatarSeed,
-  subscribeToProfileChanges,
 } satisfies typeof RealApi;
 
 void _mockSurface;
