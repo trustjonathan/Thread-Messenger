@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Copy, Check, Share2, RefreshCw, AlertCircle, X, Link as LinkIcon, ShieldAlert } from 'lucide-react';
 import { getMyInviteCode, regenerateInviteCode } from '@/lib/apiClient';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -56,7 +56,10 @@ export function InviteFriendsModal({ isOpen, onClose }: Props) {
 
   if (!isOpen) return null;
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://thread.app';
+  const origin =
+    typeof window !== 'undefined' && window.location
+      ? window.location.origin
+      : 'https://thread.app';
   const inviteLink = code ? `${origin}/invite/${code}` : '';
   const shareMessage = `Join me on Thread, a free text messenger. ${inviteLink}`;
 

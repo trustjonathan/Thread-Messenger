@@ -452,6 +452,8 @@ export function Sidebar({
         </div>
       )}
 
+      <InviteFriendsModal isOpen={isInviteOpen} onClose={() => setIsInviteOpen(false)} />
+
       {/* Mobile AI sheet (only shown on mobile) */}
       {isAISheetOpen && !isDesktop && (
         <AiChat variant="sheet" onClose={() => setIsAISheetOpen(false)} />

@@ -42,12 +42,12 @@ describe('Catalog verification (local DB mirrors hosted)', () => {
     expect(error).not.toBeNull();
   });
 
-  it('anon CAN call resolve_invite (returns INVALID_INVITE rather than permission denied)', async () => {
+  it('anon CAN call resolve_invite (returns empty result rather than permission denied)', async () => {
     anon = createTestClient();
-    const { error } = await (anon as unknown as { rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message?: string } | null }> }).rpc('resolve_invite', {
+    const { data, error } = await (anon as unknown as { rpc: (fn: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> }).rpc('resolve_invite', {
       p_code: 'abc123def456',
     });
-    expect(error).not.toBeNull();
-    expect(error?.message).toContain('INVALID_INVITE');
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
   });
 });

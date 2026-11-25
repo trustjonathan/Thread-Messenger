@@ -181,7 +181,8 @@ BEGIN
   PERFORM extensions.digest(coalesce(v_clean_code, '') || 'constant_time_salt_thread', 'sha256');
 
   IF NOT v_found THEN
-    RAISE EXCEPTION 'INVALID_INVITE' USING errcode = 'P0001';
+    -- Return empty set instead of raising so rate-limit counter commits
+    RETURN;
   END IF;
 
   RETURN QUERY SELECT v_username, v_display_name, v_avatar_seed;
@@ -219,7 +220,8 @@ BEGIN
   v_clean_code := trim(p_code);
 
   IF v_clean_code IS NULL OR length(v_clean_code) < 10 OR length(v_clean_code) > 32 THEN
-    RAISE EXCEPTION 'INVALID_INVITE' USING errcode = 'P0001';
+    PERFORM extensions.digest(coalesce(v_clean_code, '') || 'constant_time_redeem_thread', 'sha256');
+    RETURN NULL;
   END IF;
 
   SELECT ic.user_id INTO v_inviter_id
@@ -230,19 +232,19 @@ BEGIN
   PERFORM extensions.digest(coalesce(v_clean_code, '') || 'constant_time_redeem_thread', 'sha256');
 
   IF v_inviter_id IS NULL THEN
-    RAISE EXCEPTION 'INVALID_INVITE' USING errcode = 'P0001';
+    RETURN NULL;
   END IF;
 
   -- Self-invite refused
   IF v_inviter_id = v_auth_id THEN
-    RAISE EXCEPTION 'INVALID_INVITE' USING errcode = 'P0001';
+    RETURN NULL;
   END IF;
 
   -- Check if blocked between caller and inviter
   SELECT private.is_blocked_between(v_auth_id, v_inviter_id) INTO v_is_blocked;
   IF v_is_blocked THEN
-    -- Return identical generic error without revealing block
-    RAISE EXCEPTION 'INVALID_INVITE' USING errcode = 'P0001';
+    -- Return identical generic result without revealing block
+    RETURN NULL;
   END IF;
 
   SELECT p.username INTO v_inviter_username
@@ -250,7 +252,7 @@ BEGIN
   WHERE p.id = v_inviter_id;
 
   IF v_inviter_username IS NULL THEN
-    RAISE EXCEPTION 'INVALID_INVITE' USING errcode = 'P0001';
+    RETURN NULL;
   END IF;
 
   RETURN v_inviter_username;

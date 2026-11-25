@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   searchUserByUsername,
   getOrCreateDirectConversation,
 } from '@/lib/apiClient';
 import { Avatar } from './components/Avatar';
 import { getHumanErrorMessage } from './components/ErrorMessage';
-import { ArrowLeft, Search, UserX, Copy, Check, MessageSquare, AlertCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Search, UserX, Copy, MessageSquare, AlertCircle, RefreshCw } from 'lucide-react';
 import { InviteFriendsModal } from './components/InviteFriendsModal';
 
 interface UserPreview {
@@ -24,13 +24,17 @@ interface NewChatContentProps {
   pane?: boolean;
 }
 
+function getQueryUsername(): string {
+  if (typeof window === 'undefined' || !window.location) return '';
+  return new URLSearchParams(window.location.search).get('username') || '';
+}
+
 /**
  * Shared UI logic for "New chat" — used in both the standalone mobile page
  * and the desktop right-pane embed.
  */
 export function NewChatContent({ onNavigate, onBack, pane = false }: NewChatContentProps) {
-  const [searchParams] = useSearchParams();
-  const [searchTerm, setSearchTerm] = useState(searchParams.get('username') || '');
+  const [searchTerm, setSearchTerm] = useState(() => getQueryUsername());
   const [isSearching, setIsSearching] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [foundUser, setFoundUser] = useState<UserPreview | null>(null);
@@ -40,7 +44,7 @@ export function NewChatContent({ onNavigate, onBack, pane = false }: NewChatCont
 
   // Auto-search if username parameter is supplied (e.g. from invite redemption)
   useEffect(() => {
-    const paramUser = searchParams.get('username');
+    const paramUser = getQueryUsername();
     if (paramUser && paramUser.trim()) {
       const clean = paramUser.trim().toLowerCase();
       setSearchTerm(clean);
@@ -57,7 +61,7 @@ export function NewChatContent({ onNavigate, onBack, pane = false }: NewChatCont
         setErrorCode('OPERATION_FAILED');
       });
     }
-  }, [searchParams]);
+  }, []);
 
   const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -105,17 +109,6 @@ export function NewChatContent({ onNavigate, onBack, pane = false }: NewChatCont
     } catch {
       setErrorCode('OPERATION_FAILED');
       setIsCreatingChat(false);
-    }
-  };
-
-  const handleCopyInviteLink = async () => {
-    try {
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      await navigator.clipboard.writeText(origin);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    } catch {
-      // fallback
     }
   };
 
