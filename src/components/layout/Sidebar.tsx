@@ -414,6 +414,14 @@ export function Sidebar({
           >
             <MessageSquarePlus className="w-6 h-6" />
           </button>
+          <Link
+            to="/t-chat"
+            className="fixed z-40 left-1/2 bottom-[calc(20px+env(safe-area-inset-bottom))] -translate-x-1/2 rounded-full bg-white px-4 py-3 text-sm font-semibold text-thread-accent shadow-lg ring-1 ring-thread-border transition-colors hover:bg-thread-soft focus:outline-none focus:ring-2 focus:ring-thread-accent dark:bg-slate-900 dark:text-thread-accent dark:ring-slate-700"
+            aria-label="T-Chat"
+            title="T-Chat"
+          >
+            T-Chat
+          </Link>
           <button
             type="button"
             onClick={handleAiClick}
@@ -439,6 +447,14 @@ export function Sidebar({
           >
             <MessageSquarePlus className="w-6 h-6" />
           </button>
+          <Link
+            to="/t-chat"
+            className="inline-flex min-h-11 items-center rounded-full border border-thread-border bg-white px-5 text-sm font-semibold text-thread-accent shadow-sm transition-colors hover:bg-thread-soft focus:outline-none focus:ring-2 focus:ring-thread-accent dark:border-slate-700 dark:bg-slate-900 dark:text-thread-accent"
+            aria-label="T-Chat"
+            title="T-Chat"
+          >
+            T-Chat
+          </Link>
           {/* AI – right */}
           <button
             type="button"

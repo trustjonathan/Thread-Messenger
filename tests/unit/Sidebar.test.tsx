@@ -124,6 +124,16 @@ describe('Desktop layout (window.innerWidth >= 768)', () => {
     const matches = html.match(/aria-label="New chat"/g);
     expect(matches).toHaveLength(1);
   });
+
+  it('places T-Chat between New chat and Ask AI', () => {
+    const html = renderSidebarHtml();
+    expect(html.indexOf('aria-label="New chat"')).toBeLessThan(
+      html.indexOf('aria-label="T-Chat"')
+    );
+    expect(html.indexOf('aria-label="T-Chat"')).toBeLessThan(
+      html.indexOf('aria-label="Ask AI"')
+    );
+  });
 });
 
 describe('Mobile layout (window.innerWidth=360)', () => {
@@ -158,6 +168,7 @@ describe('Mobile layout (window.innerWidth=360)', () => {
   it('shows both floating action buttons on mobile', () => {
     const html = renderSidebarHtml({ currentUser: null });
     expect(html).toContain('aria-label="New chat"');
+    expect(html).toContain('aria-label="T-Chat"');
     expect(html).toContain('aria-label="Ask AI"');
   });
 
