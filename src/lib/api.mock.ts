@@ -18,6 +18,11 @@ import type * as RealApi from './api';
 
 // Re-export mapError and newClientId so the mock module matches the real API surface
 export { mapError, newClientId };
+export const OFFLINE_MESSAGE_SYNCED_EVENT = 'thread:offline-message-synced';
+
+export async function flushQueuedMessages(): Promise<ApiResult<number>> {
+  return { data: 0, error: null };
+}
 
 // Simulated latency helper (200 - 400 ms)
 const simulateLatency = async (): Promise<void> => {
@@ -642,6 +647,8 @@ export async function streamAiPrompt({
 const _mockSurface = {
   mapError,
   newClientId,
+  OFFLINE_MESSAGE_SYNCED_EVENT,
+  flushQueuedMessages,
   searchUserByUsername,
   setUsername,
   getOrCreateDirectConversation,

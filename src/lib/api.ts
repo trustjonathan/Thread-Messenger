@@ -1,6 +1,18 @@
-import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
+import type { RealtimeChannel, SupabaseClient, User } from '@supabase/supabase-js';
 import { supabase as defaultClient } from './supabaseClient';
 import type { Database } from '../types/database';
+import {
+  cacheConversations,
+  cacheMessages,
+  cacheProfile,
+  completeQueuedMessage,
+  failQueuedMessage,
+  getCachedConversations,
+  getCachedMessages,
+  getCachedProfile,
+  getQueuedMessages,
+  queueMessage,
+} from './offlineCache';
 import type {
   ApiError,
   ApiResult,
@@ -17,6 +29,70 @@ import type {
   AiChatResponse,
   ResolvedInvite,
 } from '../types/api';
+
+export const OFFLINE_MESSAGE_SYNCED_EVENT = 'thread:offline-message-synced';
+
+async function getLocalSessionUser(client: SupabaseClient<Database>): Promise<User | null> {
+  try {
+    if (!client.auth || typeof client.auth.getSession !== 'function') return null;
+    const { data, error } = await client.auth.getSession();
+    if (error) {
+      console.warn('[api] Unable to read the locally stored auth session.', error);
+    }
+    return data.session?.user ?? null;
+  } catch (error) {
+    console.warn('[api] Unable to read the locally stored auth session.', error);
+    return null;
+  }
+}
+
+function logOfflineCacheError(operation: string, error: unknown): void {
+  console.error(`[api] Failed to ${operation} in local chat storage.`, error);
+}
+
+async function getCachedConversationsAfterNetworkFailure(
+  client: SupabaseClient<Database>,
+  error: unknown
+): Promise<ApiResult<ConversationSummary[]>> {
+  const mappedError = mapError(error);
+  if (mappedError.code !== 'NETWORK_ERROR') return { data: null, error: mappedError };
+
+  const user = await getLocalSessionUser(client);
+  if (!user) return { data: null, error: mappedError };
+  try {
+    return { data: await getCachedConversations(user.id), error: null };
+  } catch (cacheError) {
+    return { data: null, error: mapError(cacheError) };
+  }
+}
+
+async function getCachedMessagesAfterNetworkFailure(
+  client: SupabaseClient<Database>,
+  conversationId: string,
+  cursor: MessageCursor | undefined,
+  limit: number,
+  error: unknown
+): Promise<ApiResult<PaginatedMessages>> {
+  const mappedError = mapError(error);
+  if (mappedError.code !== 'NETWORK_ERROR') return { data: null, error: mappedError };
+
+  const user = await getLocalSessionUser(client);
+  if (!user) return { data: null, error: mappedError };
+  try {
+    return {
+      data: await getCachedMessages(user.id, conversationId, cursor, limit),
+      error: null,
+    };
+  } catch (cacheError) {
+    return { data: null, error: mapError(cacheError) };
+  }
+}
+
+function notifyOfflineMessageSynced(message: Message): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<Message>(OFFLINE_MESSAGE_SYNCED_EVENT, { detail: message }));
+  }
+}
 
 /**
  * Maps raw PostgREST / Supabase / network errors to strict typed ApiErrors.
@@ -221,7 +297,7 @@ export async function listConversations(
     const { data, error } = await client.rpc('list_conversations');
 
     if (error) {
-      return { data: null, error: mapError(error) };
+      return getCachedConversationsAfterNetworkFailure(client, error);
     }
 
     const summaries: ConversationSummary[] = (data || []).map((row) => ({
@@ -250,9 +326,18 @@ export async function listConversations(
       unreadCount: Number(row.unread_count),
     }));
 
+    const user = await getLocalSessionUser(client);
+    if (user) {
+      try {
+        await cacheConversations(user.id, summaries);
+      } catch (cacheError) {
+        logOfflineCacheError('cache conversations', cacheError);
+      }
+    }
+
     return { data: summaries, error: null };
   } catch (err) {
-    return { data: null, error: mapError(err) };
+    return getCachedConversationsAfterNetworkFailure(client, err);
   }
 }
 
@@ -268,9 +353,8 @@ export async function loadMessages(
   },
   client: SupabaseClient<Database> = defaultClient
 ): Promise<ApiResult<PaginatedMessages>> {
+  const pageSize = Math.min(Math.max(params.limit ?? 30, 1), 50);
   try {
-    const pageSize = Math.min(Math.max(params.limit ?? 30, 1), 50);
-
     let query = client
       .from('messages')
       .select('id, conversation_id, sender_id, client_id, body, created_at')
@@ -288,7 +372,13 @@ export async function loadMessages(
     const { data, error } = await query;
 
     if (error) {
-      return { data: null, error: mapError(error) };
+      return getCachedMessagesAfterNetworkFailure(
+        client,
+        params.conversationId,
+        params.cursor,
+        pageSize,
+        error
+      );
     }
 
     const rawRows = data || [];
@@ -309,6 +399,15 @@ export async function loadMessages(
       ? { createdAt: last.createdAt, id: last.id }
       : null;
 
+    const user = await getLocalSessionUser(client);
+    if (user) {
+      try {
+        await cacheMessages(user.id, messages);
+      } catch (cacheError) {
+        logOfflineCacheError('cache messages', cacheError);
+      }
+    }
+
     return {
       data: {
         messages,
@@ -318,7 +417,40 @@ export async function loadMessages(
       error: null,
     };
   } catch (err) {
-    return { data: null, error: mapError(err) };
+    return getCachedMessagesAfterNetworkFailure(
+      client,
+      params.conversationId,
+      params.cursor,
+      pageSize,
+      err
+    );
+  }
+}
+
+async function queueMessageAfterNetworkFailure(
+  params: { conversationId: string; body: string; clientId: string },
+  client: SupabaseClient<Database>,
+  error: unknown
+): Promise<ApiResult<Message>> {
+  const mappedError = mapError(error);
+  if (mappedError.code !== 'NETWORK_ERROR') return { data: null, error: mappedError };
+
+  const user = await getLocalSessionUser(client);
+  if (!user) return { data: null, error: mappedError };
+
+  try {
+    const queued = await queueMessage(user.id, {
+      id: `offline:${params.clientId}`,
+      conversationId: params.conversationId,
+      senderId: user.id,
+      clientId: params.clientId,
+      body: params.body,
+      createdAt: new Date().toISOString(),
+    });
+    return { data: queued, error: null };
+  } catch (cacheError) {
+    logOfflineCacheError('queue an unsent message', cacheError);
+    return { data: null, error: mapError(cacheError) };
   }
 }
 
@@ -342,22 +474,104 @@ export async function sendMessage(
     });
 
     if (error) {
-      return { data: null, error: mapError(error) };
+      return queueMessageAfterNetworkFailure(params, client, error);
     }
 
-    return {
-      data: {
+    const message: Message = {
+      id: data.id,
+      conversationId: data.conversation_id,
+      senderId: data.sender_id,
+      clientId: data.client_id,
+      body: data.body,
+      createdAt: data.created_at,
+    };
+    const user = await getLocalSessionUser(client);
+    if (user) {
+      try {
+        await cacheMessages(user.id, [message]);
+      } catch (cacheError) {
+        logOfflineCacheError('cache a sent message', cacheError);
+      }
+    }
+    return { data: message, error: null };
+  } catch (err) {
+    return queueMessageAfterNetworkFailure(params, client, err);
+  }
+}
+
+const activeOutboxSyncs = new Map<string, Promise<ApiResult<number>>>();
+
+export function flushQueuedMessages(
+  userId: string,
+  client: SupabaseClient<Database> = defaultClient
+): Promise<ApiResult<number>> {
+  const activeSync = activeOutboxSyncs.get(userId);
+  if (activeSync) return activeSync;
+
+  const sync = runQueuedMessageSync(userId, client).finally(() => {
+    activeOutboxSyncs.delete(userId);
+  });
+  activeOutboxSyncs.set(userId, sync);
+  return sync;
+}
+
+async function runQueuedMessageSync(
+  userId: string,
+  client: SupabaseClient<Database>
+): Promise<ApiResult<number>> {
+  try {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return { data: 0, error: null };
+    }
+
+    const currentUser = await getLocalSessionUser(client);
+    if (!currentUser || currentUser.id !== userId) {
+      return {
+        data: null,
+        error: { code: 'UNAUTHENTICATED', message: 'User session changed before messages could sync.' },
+      };
+    }
+
+    const queuedMessages = await getQueuedMessages(userId);
+    let syncedCount = 0;
+    for (const queued of queuedMessages) {
+      const { data, error } = await client.rpc('send_message', {
+        p_conversation_id: queued.conversationId,
+        p_body: queued.body,
+        p_client_id: queued.clientId,
+      });
+
+      if (error) {
+        const mappedError = mapError(error);
+        if (mappedError.code === 'NETWORK_ERROR') {
+          return { data: null, error: mappedError };
+        }
+
+        const failedMessage: Message = {
+          ...queued,
+          deliveryStatus: 'failed',
+        };
+        await failQueuedMessage(userId, queued.clientId, failedMessage);
+        notifyOfflineMessageSynced(failedMessage);
+        continue;
+      }
+
+      const syncedMessage: Message = {
         id: data.id,
         conversationId: data.conversation_id,
         senderId: data.sender_id,
         clientId: data.client_id,
         body: data.body,
         createdAt: data.created_at,
-      },
-      error: null,
-    };
-  } catch (err) {
-    return { data: null, error: mapError(err) };
+      };
+      await completeQueuedMessage(userId, queued.clientId, syncedMessage);
+      notifyOfflineMessageSynced(syncedMessage);
+      syncedCount += 1;
+    }
+
+    return { data: syncedCount, error: null };
+  } catch (error) {
+    return { data: null, error: mapError(error) };
   }
 }
 
@@ -547,6 +761,9 @@ export function subscribeToUserMessages(
           body: raw.body,
           createdAt: raw.created_at,
         };
+        void cacheMessages(userId, [message]).catch((cacheError) => {
+          logOfflineCacheError('cache a received message', cacheError);
+        });
         // Fan out to all registered message listeners.
         for (const listener of sub.messageListeners) {
           try {
@@ -718,51 +935,87 @@ export async function signOut(
  * Gets the current authenticated user and their profile.
  */
 export async function getCurrentUser(
-  client: SupabaseClient<Database> = defaultClient
+  client: SupabaseClient<Database> = defaultClient,
+  sessionUser?: User
 ): Promise<ApiResult<CurrentUser | null>> {
+  let resolvedUser = sessionUser ?? null;
   try {
-    const { data: authData, error: authError } = await client.auth.getUser();
-    if (authError || !authData?.user) {
+    resolvedUser = resolvedUser ?? await getLocalSessionUser(client);
+    if (!resolvedUser) {
+      const { data: authData, error: authError } = await client.auth.getUser();
+      if (authError) {
+        const mappedError = mapError(authError);
+        return mappedError.code === 'NETWORK_ERROR'
+          ? { data: null, error: mappedError }
+          : { data: null, error: null };
+      }
+      resolvedUser = authData?.user ?? null;
+    }
+
+    if (!resolvedUser) {
       return { data: null, error: null };
     }
 
-    const user = authData.user;
     const { data: profile, error: profileError } = await client
       .from('profiles')
       .select('id, username, display_name, username_set, avatar_seed')
-      .eq('id', user.id)
+      .eq('id', resolvedUser.id)
       .maybeSingle();
 
     if (profileError) {
-      return { data: null, error: mapError(profileError) };
+      const mappedError = mapError(profileError);
+      if (mappedError.code === 'NETWORK_ERROR') {
+        try {
+          const cachedProfile = await getCachedProfile(resolvedUser.id);
+          if (cachedProfile) return { data: cachedProfile, error: null };
+        } catch (cacheError) {
+          return { data: null, error: mapError(cacheError) };
+        }
+      }
+      return { data: null, error: mappedError };
     }
 
     if (profile) {
-      return {
-        data: {
-          id: profile.id,
-          username: profile.username,
-          displayName: profile.display_name,
-          usernameSet: profile.username_set,
-          avatarSeed: profile.avatar_seed,
-        },
-        error: null,
+      const currentUser: CurrentUser = {
+        id: profile.id,
+        username: profile.username,
+        displayName: profile.display_name,
+        usernameSet: profile.username_set,
+        avatarSeed: profile.avatar_seed,
       };
+      try {
+        await cacheProfile(currentUser);
+      } catch (cacheError) {
+        logOfflineCacheError('cache the current user profile', cacheError);
+      }
+      return { data: currentUser, error: null };
     }
 
     // Fallback if profile row is still being populated by handle_new_user trigger
-    const metadata = user.user_metadata || {};
-    return {
-      data: {
-        id: user.id,
-        username: (metadata.username as string) || user.email?.split('@')[0] || 'user',
-        displayName: (metadata.full_name as string) || (metadata.name as string) || 'User',
-        usernameSet: false,
-      },
-      error: null,
+    const metadata = resolvedUser.user_metadata || {};
+    const currentUser: CurrentUser = {
+      id: resolvedUser.id,
+      username: (metadata.username as string) || resolvedUser.email?.split('@')[0] || 'user',
+      displayName: (metadata.full_name as string) || (metadata.name as string) || 'User',
+      usernameSet: false,
     };
+    try {
+      await cacheProfile(currentUser);
+    } catch (cacheError) {
+      logOfflineCacheError('cache the current user profile', cacheError);
+    }
+    return { data: currentUser, error: null };
   } catch (err) {
-    return { data: null, error: mapError(err) };
+    const mappedError = mapError(err);
+    if (mappedError.code === 'NETWORK_ERROR' && resolvedUser) {
+      try {
+        const cachedProfile = await getCachedProfile(resolvedUser.id);
+        if (cachedProfile) return { data: cachedProfile, error: null };
+      } catch (cacheError) {
+        return { data: null, error: mapError(cacheError) };
+      }
+    }
+    return { data: null, error: mappedError };
   }
 }
 
@@ -785,8 +1038,8 @@ export function onAuthChange(
   } = client.auth.onAuthStateChange(async (_event, session) => {
     console.log(`[${ts()}] [api] onAuthChange event=${_event} user=${session?.user?.id ?? 'null'}`);
     if (session?.user) {
-      // Fetch profile to build CurrentUser
-      const res = await getCurrentUser(client);
+      // Use the event's local session to avoid a remote auth.getUser call while offline.
+      const res = await getCurrentUser(client, session.user);
       for (const listener of authListeners) {
         try {
           listener(res.data);

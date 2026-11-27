@@ -6,8 +6,9 @@ import {
   Navigate,
   useLocation,
 } from 'react-router-dom';
-import { onAuthChange, updateLastSeen } from '@/lib/apiClient';
+import { flushQueuedMessages, onAuthChange, updateLastSeen } from '@/lib/apiClient';
 import { getPendingInviteCode } from '@/lib/inviteStorage';
+import { applyTheme, readThemeOverride, resolveDarkTheme } from '@/lib/theme';
 import type { CurrentUser } from '@/types/api';
 
 // Pages
@@ -143,22 +144,13 @@ export function App() {
 
   useEffect(() => {
     const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
-    const applyTheme = () => {
-      const savedTheme = localStorage.getItem('thread-theme');
-      document.documentElement.classList.toggle(
-        'dark',
-        savedTheme ? savedTheme === 'dark' : colorScheme.matches
-      );
-    };
-    const handleColorSchemeChange = (event: MediaQueryListEvent) => {
-      if (!localStorage.getItem('thread-theme')) {
-        document.documentElement.classList.toggle('dark', event.matches);
-      }
+    const updateTheme = () => {
+      applyTheme(resolveDarkTheme(readThemeOverride(), colorScheme.matches));
     };
 
-    applyTheme();
-    colorScheme.addEventListener('change', handleColorSchemeChange);
-    return () => colorScheme.removeEventListener('change', handleColorSchemeChange);
+    updateTheme();
+    colorScheme.addEventListener('change', updateTheme);
+    return () => colorScheme.removeEventListener('change', updateTheme);
   }, []);
 
   // Auth state listener — onAuthChange fires immediately with INITIAL_SESSION
@@ -177,6 +169,23 @@ export function App() {
       unsubscribe();
     };
   }, []);
+
+  // Retry durable offline sends when the authenticated app opens or reconnects.
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const syncQueuedMessages = () => {
+      void flushQueuedMessages(user.id).then((result) => {
+        if (result.error && result.error.code !== 'NETWORK_ERROR') {
+          console.error('[app] Unable to sync queued messages.', result.error);
+        }
+      });
+    };
+
+    syncQueuedMessages();
+    window.addEventListener('online', syncQueuedMessages);
+    return () => window.removeEventListener('online', syncQueuedMessages);
+  }, [user?.id]);
 
   // Heartbeat: updateLastSeen on app open & every 5 minutes while visible
   const triggerUpdateLastSeen = useCallback(() => {

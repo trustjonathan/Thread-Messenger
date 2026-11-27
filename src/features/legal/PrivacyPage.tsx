@@ -68,6 +68,7 @@ export default function PrivacyPage() {
           <section data-reveal>
             <h2 id="privacy-storage" className="scroll-mt-24 text-xl font-semibold text-slate-950 dark:text-white">Storage and third-party services</h2>
             <p className="mt-3">Thread uses Supabase for authentication, database storage, and hosting functions. Google is used for sign-in. Render is used to host the web app and static pages.</p>
+            <p className="mt-3">To support offline use, Thread stores your profile, recent conversations, and recent messages in this browser on your device. Messages you send without a connection are kept there until they can be sent. These local copies are not encrypted by Thread and may remain until browser site data is cleared.</p>
             <p className="mt-3">Data is stored on systems operated by these providers and may be processed in the regions configured for those services. Their own terms and policies apply in addition to this policy.</p>
           </section>
 

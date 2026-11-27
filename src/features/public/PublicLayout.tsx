@@ -5,21 +5,40 @@ import {
   SITE_OPERATOR,
   SUPPORT_EMAIL,
 } from '@/lib/siteConstants';
+import {
+  applyTheme,
+  readThemeOverride,
+  resolveDarkTheme,
+  saveThemeOverride,
+  type ThemeOverride,
+} from '@/lib/theme';
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
-  const [dark, setDark] = useState(() =>
-    typeof window !== 'undefined'
-      ? localStorage.getItem('thread-theme') === 'dark' ||
-        (!localStorage.getItem('thread-theme') &&
-          typeof window.matchMedia === 'function' &&
-          window.matchMedia('(prefers-color-scheme: dark)').matches)
-      : false
+  const [themeOverride, setThemeOverride] = useState<ThemeOverride>(readThemeOverride);
+  const [systemDark, setSystemDark] = useState(() =>
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
   );
+  const dark = resolveDarkTheme(themeOverride, systemDark);
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem('thread-theme', dark ? 'dark' : 'light');
+    applyTheme(dark);
   }, [dark]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateSystemTheme = (event: MediaQueryListEvent) => setSystemDark(event.matches);
+    colorScheme.addEventListener('change', updateSystemTheme);
+    return () => colorScheme.removeEventListener('change', updateSystemTheme);
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = dark ? 'light' : 'dark';
+    setThemeOverride(nextTheme);
+    saveThemeOverride(nextTheme);
+  };
 
   useEffect(() => {
     const revealTargets = document.querySelectorAll<HTMLElement>('[data-reveal]');
@@ -64,7 +83,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
           <nav aria-label="Public navigation" className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setDark((value) => !value)}
+              onClick={toggleTheme}
               className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-slate-300 dark:hover:bg-slate-900"
               aria-label={dark ? 'Use light theme' : 'Use dark theme'}
             >

@@ -65,6 +65,7 @@ export interface Message {
   clientId: string;
   body: string;
   createdAt: string;
+  deliveryStatus?: 'queued' | 'failed';
 }
 
 export interface GroupMember {

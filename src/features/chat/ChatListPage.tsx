@@ -5,6 +5,7 @@ import {
   subscribeToUserMessages,
   getCurrentUser,
   searchMessages,
+  OFFLINE_MESSAGE_SYNCED_EVENT,
 } from '@/lib/apiClient';
 import type { ConversationSummary } from '@/types/api';
 import { IdenticonAvatar } from './components/IdenticonAvatar';
@@ -48,6 +49,18 @@ export default function ChatListPage() {
       setIsRefreshing(false);
     }
   }, []);
+
+  useEffect(() => {
+    const refreshConversations = () => {
+      void fetchConversations(true);
+    };
+    window.addEventListener('online', refreshConversations);
+    window.addEventListener(OFFLINE_MESSAGE_SYNCED_EVENT, refreshConversations);
+    return () => {
+      window.removeEventListener('online', refreshConversations);
+      window.removeEventListener(OFFLINE_MESSAGE_SYNCED_EVENT, refreshConversations);
+    };
+  }, [fetchConversations]);
 
   // Initial user fetch & conversations load
   useEffect(() => {
