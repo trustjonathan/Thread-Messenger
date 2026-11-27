@@ -12,6 +12,7 @@ import {
   reportContent,
   subscribeToUserMessages,
   getCurrentUser,
+  OFFLINE_MESSAGE_SYNCED_EVENT,
 } from '@/lib/apiClient';
 import type { MessageCursor, ConversationSummary, Message } from '@/types/api';
 import { Avatar } from './components/Avatar';
@@ -47,7 +48,7 @@ interface ChatMessage {
   senderId: string;
   body: string;
   createdAt: string;
-  status: 'sending' | 'sent' | 'failed';
+  status: 'sending' | 'queued' | 'sent' | 'failed';
   errorCode?: string;
 }
 
@@ -203,7 +204,11 @@ export default function ChatPage() {
             senderId: m.senderId,
             body: m.body,
             createdAt: m.createdAt,
-            status: 'sent',
+            status: m.deliveryStatus === 'queued'
+              ? 'queued'
+              : m.deliveryStatus === 'failed'
+                ? 'failed'
+                : 'sent',
           }));
         setMessages(formatted);
         setNextCursor(res.data.nextCursor || null);
@@ -271,7 +276,11 @@ export default function ChatPage() {
             senderId: m.senderId,
             body: m.body,
             createdAt: m.createdAt,
-            status: 'sent',
+            status: m.deliveryStatus === 'queued'
+              ? 'queued'
+              : m.deliveryStatus === 'failed'
+                ? 'failed'
+                : 'sent',
           }));
 
         setMessages((prev) => {
@@ -382,6 +391,35 @@ export default function ChatPage() {
     };
   }, [currentUserId, conversationId, triggerMarkRead, fetchInitialMessages]);
 
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const handleSyncedMessage = (event: Event) => {
+      const message = (event as CustomEvent<Message>).detail;
+      if (!message || message.conversationId !== conversationId) return;
+
+      setMessages((previous) => {
+        const index = previous.findIndex((item) => item.clientId === message.clientId);
+        const synced: ChatMessage = {
+          id: message.id,
+          clientId: message.clientId,
+          conversationId: message.conversationId,
+          senderId: message.senderId,
+          body: message.body,
+          createdAt: message.createdAt,
+          status: message.deliveryStatus ?? 'sent',
+        };
+        if (index === -1) return [...previous, synced];
+        const updated = [...previous];
+        updated[index] = synced;
+        return updated;
+      });
+    };
+
+    window.addEventListener(OFFLINE_MESSAGE_SYNCED_EVENT, handleSyncedMessage);
+    return () => window.removeEventListener(OFFLINE_MESSAGE_SYNCED_EVENT, handleSyncedMessage);
+  }, [conversationId]);
+
   // Send message with OPTIMISTIC SEND
   const handleSend = async (messageToSend?: ChatMessage) => {
     if (!conversationId) return;
@@ -449,7 +487,7 @@ export default function ChatPage() {
               ? {
                   ...m,
                   id: res.data.id,
-                  status: 'sent',
+                  status: res.data.deliveryStatus ?? 'sent',
                   createdAt: res.data.createdAt,
                   errorCode: undefined,
                 }
@@ -715,6 +753,7 @@ export default function ChatPage() {
                   {isOwn && (
                     <>
                       {msg.status === 'sending' && <MessageStatus state="sending" />}
+                      {msg.status === 'queued' && <MessageStatus state="queued" />}
                       {msg.status === 'sent' && <MessageStatus state="sent" />}
                       {msg.status === 'failed' && (
                         <MessageStatus state="failed" onRetry={() => handleSend(msg)} />

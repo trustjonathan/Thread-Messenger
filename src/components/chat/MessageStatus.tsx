@@ -1,6 +1,6 @@
 import type { FC } from 'react';
 
-export type MessageStatusState = 'sending' | 'failed' | 'sent' | 'delivered' | 'read';
+export type MessageStatusState = 'sending' | 'queued' | 'failed' | 'sent' | 'delivered' | 'read';
 
 interface Props {
   state: MessageStatusState;
@@ -9,6 +9,7 @@ interface Props {
 
 const ARIA: Record<MessageStatusState, string> = {
   sending: 'Sending',
+  queued: 'Waiting to send',
   failed: 'Not sent',
   sent: 'Sent',
   delivered: 'Delivered',
@@ -18,14 +19,14 @@ const ARIA: Record<MessageStatusState, string> = {
 export const MessageStatus: FC<Props> = ({ state, onRetry }) => {
   const iconSize = 16;
   const muted = 'text-slate-400 dark:text-slate-500';
-  if (state === 'sending') {
+  if (state === 'sending' || state === 'queued') {
     return (
       <svg
         width={iconSize}
         height={iconSize}
         viewBox="0 0 16 16"
         role="img"
-        aria-label={ARIA.sending}
+        aria-label={ARIA[state]}
         className={muted}
       >
         <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
