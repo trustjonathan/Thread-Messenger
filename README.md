@@ -29,3 +29,12 @@ Copy `.env.example` to `.env` and configure:
 VITE_SUPABASE_URL=http://127.0.0.1:54321
 VITE_SUPABASE_ANON_KEY=<your_local_or_remote_anon_key>
 ```
+
+## Contract Change Log
+
+Maintainer-authorized changes are recorded in [NEEDS_API.md](NEEDS_API.md):
+
+* `20261128000001_remove_ai_quota.sql` — Thread AI is unrestricted (no quota RPCs/cooldowns) and `send_message` checks all active group members for blocks.
+* Generated DB types were brought back in sync with migrations; client-side `as never`/`any` contract casts were removed.
+
+Contributors should still treat the files listed under **Contract Rules** as read-only and request changes through `NEEDS_API.md`.

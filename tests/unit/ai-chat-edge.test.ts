@@ -3,14 +3,10 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('npm:@supabase/supabase-js@2', () => ({
   createClient: vi.fn(),
 }));
-vi.mock('npm:postgres@3.4.5', () => ({
-  default: vi.fn(),
-}));
 
 import {
   handleAiChatRequest,
   type AiChatDeps,
-  type QuotaRow,
 } from '../../supabase/functions/ai-chat/index';
 import {
   SYSTEM_PROMPT,
@@ -52,16 +48,6 @@ function makeDeps(overrides: Partial<AiChatDeps> = {}): AiChatDeps {
   return {
     getEnv: (k) => env[k],
     verifyUser: vi.fn().mockResolvedValue({ id: 'user-123' }),
-    consumeQuota: vi.fn().mockResolvedValue({
-      allowed: true,
-      remaining_in_batch: 4,
-      batch_size: 5,
-      used_today: 1,
-      daily_cap: 10,
-      locked_until: null,
-      server_now: '2026-11-25T10:00:00Z',
-    } satisfies QuotaRow),
-    refundQuota: vi.fn().mockResolvedValue(null),
     fetchFn: vi.fn().mockResolvedValue(makeGeminiSseResponse(['Hello ', 'from mock Gemini'])),
     ...overrides,
   };
@@ -185,21 +171,9 @@ describe('ai-chat Edge Function CORS & Auth', () => {
     expect(json.error.code).toBe('UNAUTHENTICATED');
   });
 
-  it('POST with a token calls consumeQuota before Gemini and streams SSE with CORS headers', async () => {
+  it('POST with a token streams SSE directly from Gemini with CORS headers', async () => {
     const order: string[] = [];
     const deps = makeDeps({
-      consumeQuota: vi.fn().mockImplementation(async () => {
-        order.push('consumeQuota');
-        return {
-          allowed: true,
-          remaining_in_batch: 4,
-          batch_size: 5,
-          used_today: 1,
-          daily_cap: 10,
-          locked_until: null,
-          server_now: '2026-11-25T10:00:00Z',
-        };
-      }),
       fetchFn: vi.fn().mockImplementation(async (url: string) => {
         order.push('gemini');
         expect(url).toContain(':streamGenerateContent?alt=sse');
@@ -221,29 +195,18 @@ describe('ai-chat Edge Function CORS & Auth', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toContain('text/event-stream');
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
-    expect(order).toEqual(['consumeQuota', 'gemini']);
+    expect(order).toEqual(['gemini']);
 
     const body = await res.text();
     expect(body).toContain('data: {"text":"Mocked "}');
     expect(body).toContain('data: {"text":"reply"}');
     expect(body).toContain('event: done');
-    expect(body).toContain('"remainingInBatch":4');
+    expect(body).not.toContain('remainingInBatch');
   });
 
-  it('POST returns 429 and does NOT call Gemini when quota is exhausted', async () => {
-    const fetchFn = vi.fn();
-    const deps = makeDeps({
-      consumeQuota: vi.fn().mockResolvedValue({
-        allowed: false,
-        remaining_in_batch: 0,
-        batch_size: 5,
-        used_today: 5,
-        daily_cap: 10,
-        locked_until: '2026-11-25T15:00:00Z',
-        server_now: '2026-11-25T10:00:00Z',
-      }),
-      fetchFn,
-    });
+  it('POST has no quota gate and always reaches Gemini when authenticated', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(makeGeminiSseResponse(['Unrestricted']));
+    const deps = makeDeps({ fetchFn });
 
     const req = new Request('https://example.supabase.co/functions/v1/ai-chat', {
       method: 'POST',
@@ -256,8 +219,8 @@ describe('ai-chat Edge Function CORS & Auth', () => {
     });
 
     const res = await handleAiChatRequest(req, deps);
-    expect(res.status).toBe(429);
-    expect(fetchFn).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
   it('outgoing Gemini request includes SYSTEM_PROMPT in systemInstruction and maxOutputTokens=1800', async () => {
@@ -321,10 +284,8 @@ describe('ai-chat Edge Function CORS & Auth', () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it('refunds quota and returns JSON 502 if failure happens before first chunk', async () => {
-    const refundQuota = vi.fn().mockResolvedValue(null);
+  it('returns JSON 502 if failure happens before first chunk', async () => {
     const deps = makeDeps({
-      refundQuota,
       fetchFn: vi.fn().mockResolvedValue(new Response('bad', { status: 500 })),
     });
 
@@ -341,13 +302,10 @@ describe('ai-chat Edge Function CORS & Auth', () => {
     const res = await handleAiChatRequest(req, deps);
     expect(res.status).toBe(502);
     expect(res.headers.get('Content-Type')).toContain('application/json');
-    expect(refundQuota).toHaveBeenCalledTimes(1);
   });
 
-  it('ends stream with error event and does NOT refund if failure happens after first chunk', async () => {
-    const refundQuota = vi.fn().mockResolvedValue(null);
+  it('ends stream with an error event if failure happens after first chunk', async () => {
     const deps = makeDeps({
-      refundQuota,
       fetchFn: vi.fn().mockResolvedValue(makeGeminiSseResponse(['Partial ', 'more'], true)),
     });
 
@@ -366,6 +324,5 @@ describe('ai-chat Edge Function CORS & Auth', () => {
     const body = await res.text();
     expect(body).toContain('data: {"text":"Partial "}');
     expect(body).toContain('event: error');
-    expect(refundQuota).not.toHaveBeenCalled();
   });
 });

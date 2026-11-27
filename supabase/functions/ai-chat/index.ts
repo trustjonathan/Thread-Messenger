@@ -1,5 +1,4 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import postgres from 'npm:postgres@3.4.5';
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_VERSION } from './systemPrompt.ts';
 
 const BASE_ALLOWED_HEADERS =
@@ -72,22 +71,9 @@ interface RequestBody {
   history?: Array<{ role?: unknown; text?: unknown }>;
 }
 
-export interface QuotaRow {
-  allowed?: boolean;
-  refunded?: boolean;
-  remaining_in_batch: number;
-  batch_size: number;
-  used_today: number;
-  daily_cap: number;
-  locked_until: string | null;
-  server_now: string;
-}
-
 export interface AiChatDeps {
   getEnv: (key: string) => string | undefined;
   verifyUser: (authHeader: string) => Promise<{ id: string } | null>;
-  consumeQuota: (userId: string) => Promise<QuotaRow | null>;
-  refundQuota: (userId: string) => Promise<QuotaRow | null>;
   fetchFn: typeof fetch;
 }
 
@@ -103,39 +89,6 @@ function jsonResponse(
       'Content-Type': 'application/json',
     },
   });
-}
-
-function formatQuota(row: QuotaRow | null) {
-  if (!row) return null;
-  return {
-    remainingInBatch: row.remaining_in_batch,
-    batchSize: row.batch_size,
-    usedToday: row.used_today,
-    dailyCap: row.daily_cap,
-    lockedUntil: row.locked_until,
-    serverNow: row.server_now,
-  };
-}
-
-async function runQuotaRpc(
-  dbUrl: string,
-  userId: string,
-  fnName: 'consume_ai_prompt' | 'refund_ai_prompt'
-): Promise<QuotaRow | null> {
-  const sql = postgres(dbUrl, { max: 1, prepare: false });
-  try {
-    const rows = await sql.begin(async (tx) => {
-      const claims = JSON.stringify({ sub: userId, role: 'service_role' });
-      await tx`SELECT set_config('request.jwt.claims', ${claims}, true)`;
-      if (fnName === 'consume_ai_prompt') {
-        return await tx<QuotaRow[]>`SELECT * FROM public.consume_ai_prompt()`;
-      }
-      return await tx<QuotaRow[]>`SELECT * FROM public.refund_ai_prompt()`;
-    });
-    return rows[0] ?? null;
-  } finally {
-    await sql.end({ timeout: 2 });
-  }
 }
 
 export function createDefaultDeps(): AiChatDeps {
@@ -158,16 +111,6 @@ export function createDefaultDeps(): AiChatDeps {
       } = await supabaseUser.auth.getUser();
       if (error || !user) return null;
       return { id: user.id };
-    },
-    consumeQuota: async (userId: string) => {
-      const dbUrl = getEnv('SUPABASE_DB_URL');
-      if (!dbUrl) return null;
-      return await runQuotaRpc(dbUrl, userId, 'consume_ai_prompt');
-    },
-    refundQuota: async (userId: string) => {
-      const dbUrl = getEnv('SUPABASE_DB_URL');
-      if (!dbUrl) return null;
-      return await runQuotaRpc(dbUrl, userId, 'refund_ai_prompt');
     },
     fetchFn: fetch,
   };
@@ -295,31 +238,7 @@ export async function handleAiChatRequest(
     );
   }
 
-  // 4. Consume quota atomically before calling Gemini
-  let consumed = false;
-  let quotaRow: QuotaRow | null = null;
-
-  try {
-    quotaRow = await deps.consumeQuota(user.id);
-    if (quotaRow && quotaRow.allowed === false) {
-      console.info('[ai-chat]', { userId: user.id, status: 429, promptVersion: SYSTEM_PROMPT_VERSION });
-      return jsonResponse(
-        429,
-        {
-          error: {
-            code: 'RATE_LIMITED',
-            message: 'AI prompt limit reached. Please wait before trying again.',
-            details: formatQuota(quotaRow),
-          },
-        },
-        corsHeaders
-      );
-    }
-    consumed = Boolean(quotaRow?.allowed);
-  } catch (err) {
-    console.warn('[ai-chat] consume_ai_prompt failed, continuing:', err);
-  }
-
+  // 4. Thread AI is unrestricted: no quota consumption or cooldown gate.
   const contents = [
     ...safeHistory.map((turn) => ({
       role: turn.role === 'assistant' ? 'model' : 'user',
@@ -387,13 +306,6 @@ export async function handleAiChatRequest(
     if (!geminiRes || !geminiRes.ok || !geminiRes.body) {
       const errText = geminiRes ? await geminiRes.text() : 'No response';
       console.error('[ai-chat] Gemini error:', geminiRes?.status, errText);
-      if (consumed) {
-        try {
-          quotaRow = await deps.refundQuota(user.id);
-        } catch (refundErr) {
-          console.error('[ai-chat] refund_ai_prompt failed:', refundErr);
-        }
-      }
       console.info('[ai-chat]', { userId: user.id, status: 502, promptVersion: SYSTEM_PROMPT_VERSION });
       return jsonResponse(
         502,
@@ -413,7 +325,7 @@ export async function handleAiChatRequest(
     let sseBuffer = '';
 
     // Wait for the first non-empty text chunk so pre-first-chunk failures
-    // can still return a normal JSON error status and refund quota.
+    // can still return a normal JSON error status instead of a broken stream.
     const pendingTexts: string[] = [];
     while (pendingTexts.length === 0) {
       const { done, value } = await reader.read();
@@ -438,13 +350,6 @@ export async function handleAiChatRequest(
     }
 
     if (pendingTexts.length === 0) {
-      if (consumed) {
-        try {
-          quotaRow = await deps.refundQuota(user.id);
-        } catch (refundErr) {
-          console.error('[ai-chat] refund_ai_prompt failed:', refundErr);
-        }
-      }
       console.info('[ai-chat]', { userId: user.id, status: 502, promptVersion: SYSTEM_PROMPT_VERSION });
       return jsonResponse(
         502,
@@ -485,11 +390,7 @@ export async function handleAiChatRequest(
                   }
                 }
               }
-              controller.enqueue(
-                encoder.encode(
-                  `event: done\ndata: ${JSON.stringify({ quota: formatQuota(quotaRow) })}\n\n`
-                )
-              );
+              controller.enqueue(encoder.encode('event: done\ndata: {}\n\n'));
               controller.close();
               break;
             }
@@ -507,7 +408,7 @@ export async function handleAiChatRequest(
             }
           }
         } catch (streamErr) {
-          // Error after first chunk: no refund; end stream with final error event.
+          // Error after first chunk: end the stream with a final error event.
           console.error('[ai-chat] stream error after first chunk:', streamErr);
           controller.enqueue(
             encoder.encode(
@@ -535,13 +436,6 @@ export async function handleAiChatRequest(
     });
   } catch (err) {
     console.error('[ai-chat] fetch failed:', err);
-    if (consumed) {
-      try {
-        quotaRow = await deps.refundQuota(user.id);
-      } catch (refundErr) {
-        console.error('[ai-chat] refund_ai_prompt failed:', refundErr);
-      }
-    }
     console.info('[ai-chat]', { userId: user.id, status: 502, promptVersion: SYSTEM_PROMPT_VERSION });
     return jsonResponse(
       502,

@@ -5,20 +5,20 @@
  * Mobile (<md):  rendered inside a full-height slide-up sheet with a close arrow.
  *
  * Implements:
- * - Smooth SSE streaming via `streamAiPrompt` with RAF pacing (~2-4 chars/frame).
+ * - Immediate SSE streaming via `streamAiPrompt`; tokens render as they arrive.
  * - Full AI reply layout without cards/bubbles (text directly on bg, max-w-[70ch]).
  * - User messages in right-aligned accent bubbles (#4f46e5).
  * - Copy button under completed AI replies (raw Markdown) + fallback + 2s check feedback.
  * - Header menu with "Copy chat" (Markdown format: "You:" / "Thread AI:").
  * - Auto-scroll with scroll-up detection and "Jump to latest" button.
  * - Stop button (AbortController) keeping partial text.
- * - In-memory history cleared on panel exit.
+ * - Retry resends from the last user turn with clean history.
+ * - In-memory history cleared on panel exit. Thread AI has no quota or cooldown.
  */
 import {
   useEffect,
   useRef,
   useState,
-  useCallback,
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
@@ -34,8 +34,8 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { AI_NAME } from '@/lib/constants';
-import { getAiQuota, streamAiPrompt } from '@/lib/apiClient';
-import type { AiChatTurn, AiQuota } from '@/types/api';
+import { streamAiPrompt } from '@/lib/apiClient';
+import type { AiChatTurn } from '@/types/api';
 import { MessageRenderer } from '@/components/chat/MessageRenderer';
 import { copyTextToClipboard } from '@/lib/clipboard';
 
@@ -59,19 +59,16 @@ export function AiChat({ variant, onClose }: Props) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [quota, setQuota] = useState<AiQuota | null>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [copyChatStatus, setCopyChatStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const [menuOpen, setMenuOpen] = useState(false);
   const [announcement, setAnnouncement] = useState('');
 
-  // Streaming buffers and animation frame state
-  const streamBufferRef = useRef('');
-  const displayedLengthRef = useRef(0);
+  // Streaming state (tokens are applied immediately, without pacing buffers)
   const currentMsgIdRef = useRef<string | null>(null);
-  const rafIdRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const showScrollBottomRef = useRef(false);
 
   const endRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -88,21 +85,6 @@ export function AiChat({ variant, onClose }: Props) {
     };
   }, [variant]);
 
-  // Load initial quota
-  useEffect(() => {
-    let active = true;
-    getAiQuota()
-      .then((res) => {
-        if (active && res?.data) {
-          setQuota(res.data);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
-
   // Close header menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -118,10 +100,9 @@ export function AiChat({ variant, onClose }: Props) {
     };
   }, [menuOpen]);
 
-  // Clean up RAF and abort on unmount
+  // Abort an in-flight response if the assistant is closed mid-stream.
   useEffect(() => {
     return () => {
-      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
       if (abortControllerRef.current) abortControllerRef.current.abort();
     };
   }, []);
@@ -131,7 +112,9 @@ export function AiChat({ variant, onClose }: Props) {
     const el = scrollContainerRef.current;
     if (!el) return;
     const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    setShowScrollBottom(distanceToBottom > 80);
+    const shouldShow = distanceToBottom > 80;
+    showScrollBottomRef.current = shouldShow;
+    setShowScrollBottom(shouldShow);
   };
 
   const scrollToBottom = (smooth = true) => {
@@ -148,127 +131,30 @@ export function AiChat({ variant, onClose }: Props) {
     setTimeout(() => setAnnouncement(''), 3000);
   };
 
-  // Smooth pacing loop using requestAnimationFrame
-  const startPacing = useCallback((msgId: string) => {
-    const prefersReducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const toHistory = (list: UiAiMessage[]): AiChatTurn[] =>
+    list
+      .filter((m) => m.text.trim().length > 0 && !m.isInterrupted && !m.stoppedByUser)
+      .map((m) => ({ role: m.role, text: m.text }));
 
-    const step = () => {
-      const fullText = streamBufferRef.current;
-      const currentLen = displayedLengthRef.current;
-
-      if (currentLen < fullText.length) {
-        let charsToAdd = 3; // Default 2-4 chars per frame
-        const remaining = fullText.length - currentLen;
-
-        if (prefersReducedMotion) {
-          // Immediately show large chunk for reduced motion
-          charsToAdd = remaining;
-        } else if (remaining > 100) {
-          charsToAdd = 12;
-        } else if (remaining > 40) {
-          charsToAdd = 6;
-        }
-
-        const nextLen = Math.min(currentLen + charsToAdd, fullText.length);
-        displayedLengthRef.current = nextLen;
-        const visibleText = fullText.slice(0, nextLen);
-
-        setMessages((prev) =>
-          prev.map((m) => (m.id === msgId ? { ...m, text: visibleText } : m))
-        );
-
-        if (!showScrollBottom) {
-          scrollToBottom(false);
-        }
-      }
-
-      rafIdRef.current = requestAnimationFrame(step);
-    };
-
-    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-    rafIdRef.current = requestAnimationFrame(step);
-  }, [showScrollBottom]);
-
-  const flushPacing = useCallback((msgId: string) => {
-    if (rafIdRef.current) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
-    const fullText = streamBufferRef.current;
-    displayedLengthRef.current = fullText.length;
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === msgId ? { ...m, text: fullText, isStreaming: false } : m
-      )
-    );
-    if (!showScrollBottom) {
-      scrollToBottom(false);
-    }
-  }, [showScrollBottom]);
-
-  const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    const currentId = currentMsgIdRef.current;
-    if (currentId) {
-      flushPacing(currentId);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === currentId
-            ? { ...m, isStreaming: false, stoppedByUser: true }
-            : m
-        )
-      );
-    }
-    setIsStreaming(false);
-    setIsTyping(false);
-  };
-
-  const handleSubmit = async (e?: FormEvent) => {
-    e?.preventDefault();
-    const prompt = input.trim();
-    if (!prompt || isStreaming || isTyping) return;
-
+  const submitPrompt = async (prompt: string, history: AiChatTurn[]) => {
     const userMsgId = `u-${Date.now()}`;
     const aiMsgId = `a-${Date.now()}`;
 
-    const userMsg: UiAiMessage = {
-      id: userMsgId,
-      role: 'user',
-      text: prompt,
-    };
-
-    const aiMsg: UiAiMessage = {
-      id: aiMsgId,
-      role: 'assistant',
-      text: '',
-      isStreaming: true,
-    };
-
-    const history: AiChatTurn[] = messages.map((m) => ({
-      role: m.role,
-      text: m.text,
-    }));
-
-    setMessages((prev) => [...prev, userMsg, aiMsg]);
+    setMessages((prev) => [
+      ...prev,
+      { id: userMsgId, role: 'user', text: prompt },
+      { id: aiMsgId, role: 'assistant', text: '', isStreaming: true },
+    ]);
     setInput('');
     setErrorMsg(null);
     setIsStreaming(true);
     setIsTyping(true);
-
-    streamBufferRef.current = '';
-    displayedLengthRef.current = 0;
     currentMsgIdRef.current = aiMsgId;
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
     let hasReceivedFirstChunk = false;
-
     scrollToBottom(true);
 
     await streamAiPrompt({
@@ -279,39 +165,66 @@ export function AiChat({ variant, onClose }: Props) {
         if (!hasReceivedFirstChunk) {
           hasReceivedFirstChunk = true;
           setIsTyping(false);
-          startPacing(aiMsgId);
         }
-        streamBufferRef.current += chunk;
+        // Render tokens immediately — no artificial pacing buffer.
+        setMessages((prev) =>
+          prev.map((m) => (m.id === aiMsgId ? { ...m, text: m.text + chunk } : m))
+        );
+        if (!showScrollBottomRef.current) scrollToBottom(false);
       },
-      onDone: (newQuota) => {
-        if (newQuota) setQuota(newQuota);
-        flushPacing(aiMsgId);
+      onDone: () => {
         setIsStreaming(false);
         setIsTyping(false);
         currentMsgIdRef.current = null;
+        abortControllerRef.current = null;
       },
       onError: (err) => {
         if (controller.signal.aborted) return;
         setIsStreaming(false);
         setIsTyping(false);
+        currentMsgIdRef.current = null;
+        abortControllerRef.current = null;
 
         if (hasReceivedFirstChunk) {
-          flushPacing(aiMsgId);
           setMessages((prev) =>
             prev.map((m) =>
               m.id === aiMsgId ? { ...m, isInterrupted: true, isStreaming: false } : m
             )
           );
         } else {
-          // Remove empty AI message if failure happened before any chunk
+          // Remove the empty assistant turn and surface a clean, typed error.
           setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
           setErrorMsg(err.message || 'Failed to get a response from Thread AI.');
-          if (err.details && typeof err.details === 'object') {
-            setQuota(err.details as AiQuota);
-          }
         }
       },
     });
+  };
+
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    const currentId = currentMsgIdRef.current;
+    if (currentId) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === currentId
+            ? { ...m, isStreaming: false, stoppedByUser: true }
+            : m
+        )
+      );
+    }
+    currentMsgIdRef.current = null;
+    setIsStreaming(false);
+    setIsTyping(false);
+  };
+
+  const handleSubmit = async (e?: FormEvent) => {
+    e?.preventDefault();
+    const prompt = input.trim();
+    if (!prompt || isStreaming || isTyping) return;
+    await submitPrompt(prompt, toHistory(messages));
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -359,15 +272,23 @@ export function AiChat({ variant, onClose }: Props) {
   };
 
   const handleRetryLast = () => {
-    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-    if (!lastUser) return;
-    setInput(lastUser.text);
-    inputRef.current?.focus();
-  };
+    if (isStreaming || isTyping) return;
+    let userIndex = -1;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].role === 'user') {
+        userIndex = i;
+        break;
+      }
+    }
+    if (userIndex < 0) return;
 
-  const isLocked = Boolean(
-    quota?.lockedUntil && new Date(quota.lockedUntil).getTime() > Date.now()
-  );
+    const prompt = messages[userIndex].text;
+    const history = toHistory(messages.slice(0, userIndex));
+    // Drop the failed turn and everything after it, then resend cleanly.
+    setMessages((prev) => prev.slice(0, userIndex));
+    setErrorMsg(null);
+    void submitPrompt(prompt, history);
+  };
 
   const header = (
     <header className="shrink-0 h-[60px] border-b border-thread-border px-4 flex items-center justify-between gap-3 bg-thread-bg">
@@ -387,12 +308,6 @@ export function AiChat({ variant, onClose }: Props) {
       </div>
 
       <div className="flex items-center gap-3 shrink-0">
-        {quota && (
-          <span className="text-xs text-thread-muted">
-            {quota.remainingInBatch}/{quota.batchSize} left
-          </span>
-        )}
-
         {/* Menu for Copy chat */}
         <div className="relative" ref={menuRef}>
           <button
@@ -596,10 +511,8 @@ export function AiChat({ variant, onClose }: Props) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             maxLength={1000}
-            disabled={isStreaming || isLocked}
-            placeholder={
-              isLocked ? 'AI prompt limit reached — please wait' : `Ask ${AI_NAME}...`
-            }
+            disabled={isStreaming}
+            placeholder={`Ask ${AI_NAME}...`}
             className="flex-1 min-h-[44px] max-h-[144px] py-2.5 px-3 bg-transparent text-sm text-thread-text placeholder:text-thread-muted resize-none focus:outline-none leading-relaxed"
           />
 
@@ -615,7 +528,7 @@ export function AiChat({ variant, onClose }: Props) {
           ) : (
             <button
               type="submit"
-              disabled={!input.trim() || isLocked}
+              disabled={!input.trim()}
               aria-label="Send prompt"
               className="w-10 h-10 min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center shrink-0 bg-thread-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-thread-accent"
             >

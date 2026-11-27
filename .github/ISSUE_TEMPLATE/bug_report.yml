@@ -1,0 +1,92 @@
+name: Bug report
+about: Report something that is broken or behaves unexpectedly
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Thread Messenger! Please describe the problem clearly and leave out passwords, tokens, API keys, and private message contents.
+
+  - type: input
+    id: area
+    attributes:
+      label: Area affected
+      description: For example — chat UI, sign-in, groups, AI pane, PWA/offline, tests, docs.
+      placeholder: "Chat UI"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: api-mode
+    attributes:
+      label: API mode
+      description: Were you using the real Supabase backend or the in-memory mock API?
+      options:
+        - Real Supabase API
+        - Mock API (VITE_USE_MOCK_API=true)
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: route
+    attributes:
+      label: Route or screen
+      description: Which page were you on? Include a conversation or group only if it is safe to share.
+      placeholder: "/chats/..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps that let someone else see the issue.
+      placeholder: |
+        1. Sign in and open a chat
+        2. Send a message
+        3. See ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Include any error message or status shown in the UI.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, operating system, Node version, and whether the app is installed as a PWA.
+      placeholder: "Chrome 120 on Windows, Node 20, PWA installed"
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste console output or attach images if helpful. Remove secrets and personal data first.
+    validations:
+      required: false
+
+  - type: textarea
+    id: contract-note
+    attributes:
+      label: Does this need a backend or contract change?
+      description: If the fix needs a schema, RPC, Edge Function, or client API change, describe it here and record the request in NEEDS_API.md (or ask a maintainer to). A maintainer can add the needs API contract label. Do not edit contract files directly.
+    validations:
+      required: false

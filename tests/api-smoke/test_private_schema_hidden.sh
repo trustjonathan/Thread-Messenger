@@ -35,6 +35,7 @@ if [ -n "$ANON_KEY" ]; then
     echo "PASS: /rest/v1/rate_limits is unreachable through PostgREST."
   else
     echo "WARNING: Expected 404/400 for private table, got $TABLE_STATUS"
+    exit 1
   fi
 
   # Probe RPC in private schema
@@ -50,6 +51,7 @@ if [ -n "$ANON_KEY" ]; then
     echo "PASS: /rest/v1/rpc/check_rate_limit is unreachable through PostgREST."
   else
     echo "WARNING: Expected 404/400 for private RPC, got $RPC_STATUS"
+    exit 1
   fi
 else
   echo "INFO: SUPABASE_ANON_KEY not set; skipped live curl check. Config validation PASSED."

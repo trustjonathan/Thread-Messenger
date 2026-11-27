@@ -1,6 +1,6 @@
 # Thread AI Manual Evaluation Questions
 
-Run these 10 prompts in the Thread AI pane/sheet to verify depth, Markdown formatting, KaTeX math rendering, mode switching, and limits:
+Run these 10 prompts in the Thread AI pane/sheet to verify depth, Markdown formatting, KaTeX math rendering, mode switching, and immediate streaming. Thread AI has no prompt quota or cooldown; text should begin rendering as soon as the first token arrives:
 
 1. `what is mitosis` — Expect full concept breakdown: definition, all phases in order, outcome, comparison with meiosis, and a closing curiosity prompt.
 2. `solve 2x+3=11` — Expect given/asked restatement, step-by-step aligned algebra in `$$...$$`, result, and a one-line check.

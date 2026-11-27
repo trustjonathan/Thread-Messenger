@@ -16,7 +16,6 @@ import { useResizableSidebar } from '@/hooks/useResizableSidebar';
 import { InviteFriendsModal } from '@/features/chat/components/InviteFriendsModal';
 
 export default function ChatLayout() {
-  const ts = () => new Date().toISOString().split('T')[1].split('.')[0];
   const { chatId } = useParams<{ chatId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -24,9 +23,6 @@ export default function ChatLayout() {
   const isAiRoute = location.pathname === '/ai';
   const isNewChatRoute = location.pathname === '/chats/new';
   const { width, dragging, handleProps } = useResizableSidebar();
-
-  console.log(`[${ts()}] [ChatLayout] mount chatId=${chatId ?? 'none'}`);
-  const unmountedRef = useRef(false);
 
   const [chats, setChats] = useState<ConversationSummary[]>([]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -39,7 +35,6 @@ export default function ChatLayout() {
   chatIdRef.current = chatId;
 
   const fetchConversations = useCallback(async (isBackground = false) => {
-    console.log(`[${ts()}] [ChatLayout] fetchConversations start background=${isBackground}`);
     if (!isBackground) setIsRefreshing(true);
     setErrorCode(null);
     try {
@@ -47,7 +42,6 @@ export default function ChatLayout() {
       if (res?.error) {
         setErrorCode(res.error.code);
       } else if (res?.data) {
-        console.log(`[${ts()}] [ChatLayout] fetchConversations got ${res.data.length} chats`);
         setChats(res.data);
       }
     } catch {
@@ -55,7 +49,6 @@ export default function ChatLayout() {
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
-      console.log(`[${ts()}] [ChatLayout] fetchConversations done chats=${chats.length}`);
     }
   }, []);
 
@@ -75,8 +68,6 @@ export default function ChatLayout() {
 
     return () => {
       mounted = false;
-      unmountedRef.current = true;
-      console.log(`[${ts()}] [ChatLayout] cleanup/unmount chatId=${chatId ?? 'none'}`);
     };
   }, [fetchConversations]);
 
@@ -84,7 +75,6 @@ export default function ChatLayout() {
   useEffect(() => {
     if (!currentUser?.id) return;
 
-    console.log(`[${ts()}] [ChatLayout] subscribing realtime user=${currentUser.id}`);
     const unsubscribe = subscribeToUserMessages(
       currentUser.id,
       (incomingMsg: Message) => {
@@ -94,9 +84,11 @@ export default function ChatLayout() {
             if (conv.conversationId !== incomingMsg.conversationId) return conv;
 
             const isActive = conv.conversationId === activeId;
-            const newUnread = isActive
-              ? (conv.unreadCount || 0)
-              : (conv.unreadCount || 0) + 1;
+            const isOwnMessage = incomingMsg.senderId === currentUser.id;
+            const newUnread =
+              isActive || isOwnMessage
+                ? (conv.unreadCount || 0)
+                : (conv.unreadCount || 0) + 1;
 
             return {
               ...conv,
@@ -112,13 +104,11 @@ export default function ChatLayout() {
         );
       },
       () => {
-        console.log(`[${ts()}] [ChatLayout] onResync fired`);
         fetchConversations(true);
       }
     );
 
     return () => {
-      console.log(`[${ts()}] [ChatLayout] unsubscribing realtime`);
       if (typeof unsubscribe === 'function') {
         unsubscribe();
       }
@@ -127,7 +117,6 @@ export default function ChatLayout() {
 
   const handleSelect = useCallback(
     (id: string) => {
-      console.log(`[${ts()}] [ChatLayout] handleSelect navigate /chats/${id}`);
       navigate(`/chats/${id}`);
     },
     [navigate]
@@ -155,7 +144,7 @@ export default function ChatLayout() {
               senderId: currentUser?.id ?? '',
               createdAt: lastMessage.createdAt,
             },
-            unreadCount: conv.conversationId === activeId ? 0 : (conv.unreadCount || 0) + 1,
+            unreadCount: conv.conversationId === activeId ? 0 : conv.unreadCount || 0,
           };
         })
       );
@@ -164,7 +153,6 @@ export default function ChatLayout() {
   );
 
   const handleBack = () => {
-    console.log(`[${ts()}] [ChatLayout] handleBack navigate /chats`);
     navigate('/chats');
   };
 
@@ -191,14 +179,14 @@ export default function ChatLayout() {
 
   return (
     <div
-      className={`flex h-dvh w-full overflow-hidden bg-thread-bg ${
+      className={`flex h-dvh w-full overflow-hidden bg-thread-bg text-thread-text ${
         dragging ? 'cursor-col-resize select-none' : ''
       }`}
     >
       {showSidebar && (
         <aside
           style={isDesktop ? { width } : undefined}
-          className="flex h-full w-full shrink-0 flex-col border-r border-slate-200 bg-white dark:bg-slate-950"
+          className="flex h-full w-full shrink-0 flex-col border-r border-thread-border bg-thread-surface dark:bg-thread-bg"
         >
           <Sidebar
             chats={chats}
@@ -217,8 +205,8 @@ export default function ChatLayout() {
         <div
           {...handleProps}
           title="Drag to resize · double-click to reset"
-          className={`relative z-10 -ml-px w-1 shrink-0 cursor-col-resize ${
-            dragging ? 'bg-indigo-500' : 'bg-transparent'
+          className={`relative z-10 -ml-px w-1 shrink-0 cursor-col-resize transition-colors ${
+            dragging ? 'thread-gradient-bg' : 'bg-transparent hover:bg-thread-soft'
           }`}
         >
           <span className="absolute inset-y-0 -left-1 -right-1" />
@@ -228,8 +216,8 @@ export default function ChatLayout() {
       {showChat && (
         <main className="flex h-full min-w-0 flex-1 flex-col">
           {isLoading ? (
-            <div className="flex h-full items-center justify-center">
-              <div className="animate-pulse rounded-full h-8 w-8 bg-slate-200 dark:bg-slate-800" />
+            <div className="flex h-full items-center justify-center" role="status" aria-label="Loading conversations">
+              <div className="h-8 w-8 animate-pulse rounded-full border-2 border-thread-soft border-t-thread-accent-2" />
             </div>
           ) : isDesktop && isAiRoute ? (
             /* Desktop: AI view in right pane — sidebar still visible */
@@ -256,13 +244,7 @@ export default function ChatLayout() {
               onMessageSent={handleMessageSent}
             />
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center">
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                  Select a chat to start messaging
-                </p>
-              </div>
-            </div>
+            <EmptyState />
           )}
         </main>
       )}

@@ -21,14 +21,37 @@ if ($ConfigContent -match 'schemas\s*=\s*\[[^\]]*"private"[^\]]*\]') {
 
 Write-Host "=== 2. Testing PostgREST API Endpoint Protection ==="
 if ($AnonKey) {
+  $Headers = @{ "apikey" = $AnonKey; "Authorization" = "Bearer $AnonKey" }
+
   try {
-    $resp = Invoke-WebRequest -Uri "$ApiUrl/rest/v1/rate_limits" -Headers @{ "apikey" = $AnonKey; "Authorization" = "Bearer $AnonKey" } -SkipHttpErrorCheck
-    Write-Host "Probe /rest/v1/rate_limits Status: $($resp.StatusCode)"
-    if ($resp.StatusCode -eq 404 -or $resp.StatusCode -eq 400) {
-      Write-Host "PASS: /rest/v1/rate_limits is unreachable."
+    $resp = Invoke-WebRequest -Uri "$ApiUrl/rest/v1/rate_limits" -Headers $Headers -SkipHttpErrorCheck
+    $status = [int]$resp.StatusCode
+    Write-Host "Probe /rest/v1/rate_limits HTTP Status: $status"
+    if ($status -eq 404 -or $status -eq 400) {
+      Write-Host "PASS: /rest/v1/rate_limits is unreachable through PostgREST."
+    } else {
+      Write-Host "WARNING: Expected 404/400 for private table, got $status"
+      exit 1
     }
   } catch {
-    Write-Host "PASS: Request rejected ($($_.Exception.Message))"
+    Write-Host "WARNING: Expected 404/400 for private table, request rejected ($($_.Exception.Message))"
+    exit 1
+  }
+
+  try {
+    $rpcHeaders = @{ "apikey" = $AnonKey; "Authorization" = "Bearer $AnonKey"; "Content-Type" = "application/json" }
+    $rpcResp = Invoke-WebRequest -Uri "$ApiUrl/rest/v1/rpc/check_rate_limit" -Method Post -Headers $rpcHeaders -Body '{}' -SkipHttpErrorCheck
+    $rpcStatus = [int]$rpcResp.StatusCode
+    Write-Host "Probe /rest/v1/rpc/check_rate_limit HTTP Status: $rpcStatus"
+    if ($rpcStatus -eq 404 -or $rpcStatus -eq 400) {
+      Write-Host "PASS: /rest/v1/rpc/check_rate_limit is unreachable through PostgREST."
+    } else {
+      Write-Host "WARNING: Expected 404/400 for private RPC, got $rpcStatus"
+      exit 1
+    }
+  } catch {
+    Write-Host "WARNING: Expected 404/400 for private RPC, request rejected ($($_.Exception.Message))"
+    exit 1
   }
 } else {
   Write-Host "INFO: SUPABASE_ANON_KEY not set; config validation PASSED."

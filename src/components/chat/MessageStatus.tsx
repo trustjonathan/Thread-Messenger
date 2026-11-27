@@ -18,7 +18,7 @@ const ARIA: Record<MessageStatusState, string> = {
 
 export const MessageStatus: FC<Props> = ({ state, onRetry }) => {
   const iconSize = 16;
-  const muted = 'text-slate-400 dark:text-slate-500';
+  const muted = 'text-thread-muted';
   if (state === 'sending' || state === 'queued') {
     return (
       <svg
@@ -27,7 +27,7 @@ export const MessageStatus: FC<Props> = ({ state, onRetry }) => {
         viewBox="0 0 16 16"
         role="img"
         aria-label={ARIA[state]}
-        className={muted}
+        className={`${muted} thread-status-pulse`}
       >
         <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
         <path d="M8 4.5 V8 L10.5 9.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -40,7 +40,7 @@ export const MessageStatus: FC<Props> = ({ state, onRetry }) => {
         type="button"
         onClick={onRetry}
         aria-label={ARIA.failed}
-        className="inline-flex items-center gap-1 text-red-500 min-h-[44px] min-w-[44px] justify-center"
+        className="thread-focus-ring inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-full px-2 text-red-500 transition-transform hover:scale-105 dark:text-red-400"
       >
         <svg width={iconSize} height={iconSize} viewBox="0 0 16 16" role="img" aria-hidden="true">
           <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.5" />

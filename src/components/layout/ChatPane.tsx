@@ -37,8 +37,8 @@ import {
   ShieldAlert,
   UserX,
   Info,
-  Paperclip,
 } from 'lucide-react';
+import { useIsDesktop } from '@/hooks/useMediaQuery';
 
 interface OtherUser {
   id: string;
@@ -64,11 +64,9 @@ interface Props {
 }
 
 export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
-  const ts = () => new Date().toISOString().split('T')[1].split('.')[0];
   const navigate = useNavigate();
   const location = useLocation();
-
-  console.log(`[${ts()}] [ChatPane] mount chatId=${chatId}`);
+  const isDesktop = useIsDesktop();
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null);
@@ -96,6 +94,17 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
   const composerRef = useRef<HTMLElement>(null);
   const [composerHeight, setComposerHeight] = useState(64);
   const lastTypingRef = useRef(0);
+
+  // Realtime callbacks read these refs so metadata changes never re-subscribe.
+  const groupMembersRef = useRef(groupMembers);
+  const otherUserRef = useRef(otherUser);
+  const groupTitleRef = useRef(groupTitle);
+
+  useEffect(() => {
+    groupMembersRef.current = groupMembers;
+    otherUserRef.current = otherUser;
+    groupTitleRef.current = groupTitle;
+  }, [groupMembers, otherUser, groupTitle]);
 
   useEffect(() => {
     const el = composerRef.current;
@@ -331,13 +340,21 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
           (document.visibilityState !== 'visible' ||
             incomingMsg.conversationId !== chatId)
         ) {
-          const sender = groupMembers.find((m) => m.userId === incomingMsg.senderId);
+          const currentGroupTitle = groupTitleRef.current;
+          const currentOtherUser = otherUserRef.current;
+          const sender = groupMembersRef.current.find(
+            (m) => m.userId === incomingMsg.senderId
+          );
           const senderName = sender
             ? sender.displayName || sender.username
-            : otherUser?.displayName || otherUser?.username || 'Someone';
-          const convoTitle = groupTitle || otherUser?.displayName || otherUser?.username || 'Chat';
+            : currentOtherUser?.displayName || currentOtherUser?.username || 'Someone';
+          const convoTitle =
+            currentGroupTitle ||
+            currentOtherUser?.displayName ||
+            currentOtherUser?.username ||
+            'Chat';
           const title =
-            incomingMsg.conversationId === chatId && groupTitle
+            incomingMsg.conversationId === chatId && currentGroupTitle
               ? `${senderName} in ${convoTitle}`
               : incomingMsg.conversationId !== chatId
               ? 'New message'
@@ -391,12 +408,11 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
     );
 
     return () => {
-      console.log(`[${ts()}] [ChatPane] unmount chatId=${chatId} unsubscribing realtime`);
       if (typeof unsubscribe === 'function') {
         unsubscribe();
       }
     };
-  }, [currentUserId, chatId, triggerMarkRead, fetchInitialMessages, groupMembers, otherUser, groupTitle]);
+  }, [currentUserId, chatId, triggerMarkRead, fetchInitialMessages]);
 
   const handleSend = async (messageToSend?: ChatMessage) => {
     if (!chatId) return;
@@ -537,11 +553,11 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
   return (
     <div className="flex flex-col h-full w-full relative bg-thread-bg text-thread-text">
       {/* Header */}
-      <header className="shrink-0 h-[60px] bg-thread-bg border-b border-thread-border px-4 py-3 flex items-center justify-between z-10">
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="thread-glass z-10 flex h-[68px] shrink-0 items-center justify-between border-x-0 border-t-0 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             onClick={onBack}
-            className="p-2 -ml-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 lg:hidden"
+            className="thread-focus-ring -ml-2 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-2 text-thread-muted transition-all hover:scale-105 hover:bg-thread-soft hover:text-thread-accent-2 focus:ring-2 focus:ring-thread-accent lg:hidden"
             aria-label="Back to chats"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -556,22 +572,18 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
                 onClick={() => setIsGroupSettingsOpen(true)}
               />
               {groupDescription && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                  {groupDescription}
-                </p>
+                <p className="truncate text-xs text-thread-muted">{groupDescription}</p>
               )}
             </div>
           ) : (
             <>
               <Avatar name={otherDisplayName} size="sm" />
               <div className="min-w-0">
-                <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                <h1 className="truncate text-sm font-semibold text-thread-text">
                   {otherDisplayName}
                 </h1>
                 {otherUsername && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                    @{otherUsername}
-                  </p>
+                  <p className="truncate text-xs text-thread-muted">@{otherUsername}</p>
                 )}
               </div>
             </>
@@ -582,7 +594,7 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
           <button
             type="button"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="p-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="thread-focus-ring flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-2 text-thread-muted transition-all hover:scale-105 hover:bg-thread-soft hover:text-thread-accent-2 focus:ring-2 focus:ring-thread-accent"
             aria-label="Conversation actions"
             aria-expanded={isMenuOpen}
           >
@@ -591,34 +603,51 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
 
           {isMenuOpen && (
             <div
-              className="absolute right-0 mt-2 w-48 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg py-1.5 z-20 focus:outline-none"
+              className="thread-glass thread-animate-pop absolute right-0 z-20 mt-2 w-48 rounded-2xl py-1.5 focus:outline-none"
               role="menu"
             >
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  setIsReportOpen(true);
-                }}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 min-h-[44px] text-left"
-                role="menuitem"
-              >
-                <ShieldAlert className="w-4 h-4 text-amber-500" />
-                <span>Report</span>
-              </button>
+              {groupTitle ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    setIsGroupSettingsOpen(true);
+                  }}
+                  className="flex min-h-[44px] w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-thread-text hover:bg-thread-soft"
+                  role="menuitem"
+                >
+                  <Info className="h-4 w-4 text-thread-accent-2" />
+                  <span>Group info</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      setIsReportOpen(true);
+                    }}
+                    className="flex min-h-[44px] w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-thread-text hover:bg-thread-soft"
+                    role="menuitem"
+                  >
+                    <ShieldAlert className="h-4 w-4 text-amber-500" />
+                    <span>Report</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  setIsBlockOpen(true);
-                }}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 min-h-[44px] text-left"
-                role="menuitem"
-              >
-                <UserX className="w-4 h-4" />
-                <span>Block User</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      setIsBlockOpen(true);
+                    }}
+                    className="flex min-h-[44px] w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                    role="menuitem"
+                  >
+                    <UserX className="h-4 w-4" />
+                    <span>Block User</span>
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -627,12 +656,9 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
       {/* Message List */}
       <div
         ref={messageListContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-3 bg-thread-bg"
+        className="thread-scrollbar flex-1 space-y-4 overflow-y-auto bg-thread-bg p-4 sm:p-6"
         style={{
-          paddingBottom:
-            typeof window === 'undefined' || window.innerWidth < 1024
-              ? `${composerHeight + 24}px`
-              : 0,
+          paddingBottom: !isDesktop ? `${composerHeight + 24}px` : 0,
         }}
         role="region"
         aria-label="Message history"
@@ -644,7 +670,7 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
               type="button"
               onClick={handleLoadEarlier}
               disabled={isLoadingEarlier}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 min-h-[44px] transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="thread-chip thread-focus-ring min-h-[44px] px-4 py-1.5 text-xs font-medium text-thread-accent-2 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isLoadingEarlier ? (
                 <>
@@ -660,7 +686,7 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
 
         {pageError && (
           <div
-            className="p-3 text-xs rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 flex items-center justify-between"
+            className="thread-animate-in flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
             role="alert"
           >
             <span>{getHumanErrorMessage(pageError)}</span>
@@ -675,12 +701,23 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
         )}
 
         {!isLoadingMessages && messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+          <div className="thread-animate-in flex flex-col items-center justify-center px-4 py-16 text-center">
+            <div
+              aria-hidden="true"
+              className="thread-card thread-animate-pop mb-5 flex h-16 w-20 items-end justify-center gap-1.5 p-3"
+            >
+              <span className="h-4 w-4 rounded-full bg-thread-soft" />
+              <span className="h-7 w-4 rounded-full bg-thread-accent-tint" />
+              <span className="thread-gradient-bg h-5 w-4 rounded-full" />
+            </div>
+            <p className="text-sm font-semibold text-thread-text">
               No messages yet in this conversation.
             </p>
-            <div className="mt-4 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs text-slate-500 dark:text-slate-400">
-              <Info className="w-3.5 h-3.5" />
+            <p className="mt-1.5 text-xs text-thread-muted">
+              Say hello to get the thread started.
+            </p>
+            <div className="thread-chip mt-5 px-3 py-1.5 text-xs">
+              <Info className="h-3.5 w-3.5 text-thread-accent-2" />
               <span>Messages are not end-to-end encrypted.</span>
             </div>
           </div>
@@ -691,8 +728,10 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
             {[...Array(4)].map((_, i) => (
               <div key={i} className={`flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
                 <div
-                  className={`h-10 rounded-2xl animate-pulse ${
-                    i % 2 === 0 ? 'bg-slate-200 dark:bg-slate-800 w-48' : 'bg-indigo-200 dark:bg-indigo-900/40 w-40'
+                  className={`h-10 animate-pulse rounded-2xl ${
+                    i % 2 === 0
+                      ? 'w-48 bg-thread-soft'
+                      : 'w-40 bg-thread-accent-tint'
                   }`}
                 />
               </div>
@@ -708,7 +747,7 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
             new Date(msg.createdAt).toDateString() !== new Date(prevMsg.createdAt).toDateString();
 
           return (
-            <div key={msg.id || msg.clientId}>
+            <div key={msg.id || msg.clientId} className="thread-animate-in">
               {showDateSeparator && <DateSeparator date={msg.createdAt} />}
 
               <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
@@ -716,7 +755,7 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
                   const sender = groupMembers.find((m) => m.userId === msg.senderId);
                   if (!sender) return null;
                   return (
-                    <div className="flex items-center gap-1.5 mb-1 px-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    <div className="mb-1 flex items-center gap-1.5 px-1 text-[11px] text-thread-muted">
                       <IdenticonAvatar
                         seed={sender.avatarSeed || sender.userId}
                         label={sender.displayName || sender.username}
@@ -729,16 +768,16 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
                 })()}
 
                 <div
-                  className={`max-w-[80%] sm:max-w-md px-4 py-2.5 rounded-2xl text-sm break-words whitespace-pre-wrap ${
+                  className={`max-w-[80%] whitespace-pre-wrap break-words px-4 py-2.5 text-sm leading-[1.45] sm:max-w-md ${
                     isOwn
-                      ? 'bg-thread-bubble-mine text-thread-bubble-mine-text rounded-tr-none'
-                      : 'bg-thread-bubble-theirs text-thread-bubble-theirs-text border border-thread-border rounded-bl-none'
+                      ? 'thread-bubble-own bg-thread-bubble-mine text-thread-bubble-mine-text'
+                      : 'thread-bubble-other bg-thread-bubble-theirs text-thread-bubble-theirs-text'
                   }`}
                 >
                   {msg.body}
                 </div>
 
-                <div className="flex items-center gap-1.5 mt-1 px-1 text-[11px] text-slate-400 dark:text-slate-500">
+                <div className="mt-1 flex items-center gap-1.5 px-1 text-[11px] text-thread-muted">
                   <span>{formatTime(msg.createdAt)}</span>
 
                   {isOwn && (
@@ -774,18 +813,12 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
             e.preventDefault();
             handleSend();
           }}
-          className="pointer-events-auto w-full max-w-[672px] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-lg p-2 flex flex-col focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-shadow"
+          className="thread-glass pointer-events-auto flex w-full max-w-[672px] flex-col rounded-[20px] p-2 transition-shadow focus-within:border-thread-accent-2 focus-within:ring-2 focus-within:ring-thread-accent-tint"
         >
           <div className="flex items-end gap-2 w-full">
             <label htmlFor="composer-message-input" className="sr-only">
               Message
             </label>
-            <button
-              type="button"
-              className="p-2 rounded-full text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800 min-h-[44px] min-w-[44px] flex items-center justify-center"
-            >
-              <Paperclip size={20} />
-            </button>
             <textarea
               id="composer-message-input"
               ref={textareaRef}
@@ -802,17 +835,13 @@ export function ChatPane({ chatId, onBack, onMessageSent }: Props) {
               maxLength={2000}
               placeholder="Message"
               aria-label="Message"
-              className="flex-1 min-h-[44px] max-h-[144px] py-2.5 px-3 bg-transparent text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 resize-none focus:outline-none leading-relaxed"
+              className="max-h-[144px] min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-sm leading-relaxed text-thread-text placeholder:text-thread-muted focus:outline-none"
             />
 
             <button
               type="submit"
               disabled={isSendDisabled}
-              className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[44px] min-w-[44px] ${
-                isSendDisabled
-                  ? 'bg-indigo-300 dark:bg-indigo-950/60 text-white/50 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white shadow-sm'
-              }`}
+              className="thread-gradient-bg thread-focus-ring flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-full shadow-thread-glow transition-transform enabled:hover:scale-105 enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 focus:ring-2 focus:ring-thread-accent-2"
               aria-label="Send message"
             >
               <Send className="w-4 h-4 ml-0.5" />

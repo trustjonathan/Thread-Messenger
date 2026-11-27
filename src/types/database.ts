@@ -88,6 +88,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          description: string | null
           id: string
           kind: string
           title: string | null
@@ -95,6 +96,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          description?: string | null
           id?: string
           kind?: string
           title?: string | null
@@ -102,6 +104,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          description?: string | null
           id?: string
           kind?: string
           title?: string | null
@@ -298,7 +301,7 @@ export type Database = {
           unread_count: number
         }[]
       }
-      add_group_members: { Args: { p_conversation_id: string; p_usernames: string[] }; Returns: { username: string; status: string }[] }
+      add_group_members: { Args: { p_conversation_id: string; p_usernames: string[] }; Returns: { out_username: string; out_status: string }[] }
       create_group: { Args: { p_title: string; p_member_usernames: string[] }; Returns: string }
       delete_group: { Args: { p_conversation_id: string }; Returns: undefined }
       leave_group: { Args: { p_conversation_id: string }; Returns: undefined }
@@ -351,6 +354,18 @@ export type Database = {
       }
       set_username: { Args: { p_username: string }; Returns: undefined }
       update_last_seen: { Args: never; Returns: undefined }
+      update_display_name: { Args: { p_display_name: string }; Returns: undefined }
+      list_blocked_users: {
+        Args: never
+        Returns: { id: string; username: string; display_name: string }[]
+      }
+      get_my_invite_code: { Args: never; Returns: string }
+      regenerate_invite_code: { Args: never; Returns: string }
+      resolve_invite: {
+        Args: { p_code: string }
+        Returns: { username: string; display_name: string; avatar_seed: string | null }[]
+      }
+      redeem_invite: { Args: { p_code: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never

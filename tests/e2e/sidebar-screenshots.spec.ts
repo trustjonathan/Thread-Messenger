@@ -26,7 +26,9 @@ test.describe('Sidebar screenshots', () => {
           );
         });
 
-        await page.goto('http://127.0.0.1:5173/chats');
+        // Use Playwright's configured baseURL (honours E2E_PORT) instead of a
+        // hardcoded localhost:5173.
+        await page.goto('/chats');
         await page.waitForTimeout(2000);
 
         await expect(page).toHaveURL(/.*\/chats/);
