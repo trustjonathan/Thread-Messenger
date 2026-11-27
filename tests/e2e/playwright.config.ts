@@ -27,6 +27,22 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'Mobile Chrome',
+      use: { ...devices['Pixel 5'] },
+      // Mock mode emits a simulated incoming message every 20s; one local retry
+      // keeps viewport-sensitive journeys from flaking on slow CI machines.
+      retries: process.env.CI ? 2 : 1,
+    },
+    {
+      name: 'Tablet Chrome',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 820, height: 1180 },
+        hasTouch: true,
+      },
+      retries: process.env.CI ? 2 : 1,
+    },
   ],
   webServer: {
     command: `npm run dev -- --host 127.0.0.1 --port ${port}`,

@@ -89,23 +89,14 @@ export interface PaginatedMessages {
   hasMore: boolean;
 }
 
-export interface AiQuota {
-  remainingInBatch: number;
-  batchSize: number;
-  usedToday: number;
-  dailyCap: number;
-  lockedUntil: string | null;
-  serverNow: string;
-}
-
 export interface AiChatTurn {
   role: 'user' | 'assistant';
   text: string;
 }
 
+/** Thread AI is intentionally unrestricted: no quota or cooldown payloads. */
 export interface AiChatResponse {
   reply: string;
-  quota: AiQuota | null;
 }
 
 export interface ResolvedInvite {

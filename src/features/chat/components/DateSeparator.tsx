@@ -29,10 +29,16 @@ export const DateSeparator: React.FC<DateSeparatorProps> = ({ date }) => {
   };
 
   return (
-    <div className="flex items-center justify-center my-4" role="separator" aria-label={formatDate(date)}>
-      <span className="px-3 py-1 text-xs font-medium rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+    <div
+      className="my-5 flex items-center justify-center gap-3"
+      role="separator"
+      aria-label={formatDate(date)}
+    >
+      <span aria-hidden="true" className="h-px w-10 bg-gradient-to-r from-transparent to-thread-border sm:w-16" />
+      <span className="thread-chip px-3 py-1 text-[11px] font-semibold uppercase tracking-wide">
         {formatDate(date)}
       </span>
+      <span aria-hidden="true" className="h-px w-10 bg-gradient-to-l from-transparent to-thread-border sm:w-16" />
     </div>
   );
 };

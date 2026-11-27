@@ -226,15 +226,13 @@ describe('Copy Feature and Clipboard Utility', () => {
 describe('Stream Parser and Edge/Client Stream Handling', () => {
   it('correctly parses multi-byte and chunked SSE events via streamAiPrompt logic', async () => {
     const chunks: string[] = [];
-    let quotaReceived: unknown = null;
+    let doneCalled = false;
 
     // Simulate multi-byte character split across two chunks:
     // "🔬" is 4 bytes: 0xF0, 0x9F, 0x94, 0xAC
     const part1 = new Uint8Array([0x64, 0x61, 0x74, 0x61, 0x3a, 0x20, 0x7b, 0x22, 0x74, 0x65, 0x78, 0x74, 0x22, 0x3a, 0x22, 0xf0, 0x9f]); // "data: {\"text\":\"" + 2 bytes of 🔬
     const part2 = new Uint8Array([0x94, 0xac, 0x22, 0x7d, 0x0a, 0x0a]); // 2 bytes of 🔬 + "\"}\n\n"
-    const doneChunk = new TextEncoder().encode(
-      'event: done\ndata: {"quota":{"remainingInBatch":4,"batchSize":5}}\n\n'
-    );
+    const doneChunk = new TextEncoder().encode('event: done\ndata: {}\n\n');
 
     let streamStep = 0;
     const mockStream = new ReadableStream<Uint8Array>({
@@ -275,14 +273,50 @@ describe('Stream Parser and Edge/Client Stream Handling', () => {
       history: [],
       client: mockClient,
       onChunk: (t) => chunks.push(t),
-      onDone: (q) => {
-        quotaReceived = q;
+      onDone: () => {
+        doneCalled = true;
       },
       onError: () => {},
     });
 
     expect(chunks).toEqual(['🔬']);
-    expect(quotaReceived).toEqual({ remainingInBatch: 4, batchSize: 5 });
+    expect(doneCalled).toBe(true);
+  });
+
+  it('settles onDone even when an upstream proxy strips the done event', async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode('data: {"text":"Hello"}\n\n')
+        );
+        controller.close();
+      },
+    });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, body: stream, status: 200 });
+
+    const mockClient = {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: 'fake-token' } },
+        }),
+      },
+      supabaseUrl: 'https://test.supabase.co',
+      supabaseKey: 'fake-key',
+    } as unknown as SupabaseClient<Database>;
+
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+    await streamAiPrompt({
+      prompt: 'Hello',
+      client: mockClient,
+      onChunk,
+      onDone,
+      onError: vi.fn(),
+    });
+
+    expect(onChunk).toHaveBeenCalledWith('Hello');
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 
   it('renders initial AiChat UI with header options menu and 70ch width container', () => {

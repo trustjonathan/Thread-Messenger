@@ -23,7 +23,7 @@ export const Avatar: React.FC<AvatarProps> = ({ name, size = 'md', className = '
 
   return (
     <div
-      className={`inline-flex items-center justify-center font-medium rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 select-none ${sizeClasses[size]} ${className}`}
+      className={`inline-flex select-none items-center justify-center rounded-full bg-thread-soft font-semibold text-thread-accent-2 ring-1 ring-thread-border ${sizeClasses[size]} ${className}`}
       aria-hidden="true"
     >
       {initials}

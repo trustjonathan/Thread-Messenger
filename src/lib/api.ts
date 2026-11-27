@@ -24,7 +24,6 @@ import type {
   MessageCursor,
   PaginatedMessages,
   UserProfilePreview,
-  AiQuota,
   AiChatTurn,
   AiChatResponse,
   ResolvedInvite,
@@ -1092,12 +1091,10 @@ export async function updateDisplayName(
       };
     }
 
-    const { error } = await client
-      .from('profiles')
-      .update({
-        display_name: trimmed,
-      })
-      .eq('id', authData.user.id);
+    // Canonical contract: the RPC validates length and keeps profiles in sync.
+    const { error } = await client.rpc('update_display_name', {
+      p_display_name: trimmed,
+    });
 
     if (error) {
       return { data: null, error: mapError(error) };
@@ -1125,12 +1122,11 @@ export async function listBlockedUsers(
       };
     }
 
-    // Try RPC first if created on database
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rpcRes = await (client as any).rpc('list_blocked_users');
+    // Canonical contract: the settings RPC returns only public profile fields.
+    const rpcRes = await client.rpc('list_blocked_users');
     if (!rpcRes.error && Array.isArray(rpcRes.data)) {
       return {
-        data: rpcRes.data.map((r: { id: string; username: string; display_name: string }) => ({
+        data: rpcRes.data.map((r) => ({
           id: r.id,
           username: r.username,
           displayName: r.display_name,
@@ -1195,12 +1191,11 @@ export async function addGroupMembers(
       p_usernames: usernames,
     });
     if (error) return { data: null, error: mapError(error) };
-    const raw = (data ?? []) as unknown as Array<{ out_username: string; out_status: string }>;
     return {
-      data: raw.map((r) => ({
+      data: (data ?? []).map((r) => ({
         username: r.out_username,
         status: r.out_status,
-      })) as Array<{ username: string; status: string }>,
+      })),
       error: null,
     };
   } catch (err) {
@@ -1378,54 +1373,7 @@ export async function updateAvatarSeed(
 }
 
 /**
- * Fetches the current AI quota state for the authenticated user.
- * Read-only; does not call Gemini.
- */
-export async function getAiQuota(
-  client: SupabaseClient<Database> = defaultClient
-): Promise<ApiResult<AiQuota>> {
-  try {
-    type RpcFn = (name: string, params?: Record<string, unknown>) => unknown;
-    const rpc = client.rpc as RpcFn;
-    const { data, error } = await (rpc('get_ai_quota') as unknown as {
-      data: unknown;
-      error: unknown;
-    });
-    if (error) return { data: null, error: mapError(error) };
-    if (!data) {
-      return { data: null, error: mapError(new Error('UNKNOWN_ERROR')) };
-    }
-    const raw = Array.isArray(data) ? data[0] : data;
-    if (!raw) {
-      return { data: null, error: mapError(new Error('UNKNOWN_ERROR')) };
-    }
-    const row = raw as {
-      remaining_in_batch: number;
-      batch_size: number;
-      used_today: number;
-      daily_cap: number;
-      locked_until: string | null;
-      server_now: string;
-    };
-    return {
-      data: {
-        remainingInBatch: row.remaining_in_batch,
-        batchSize: row.batch_size,
-        usedToday: row.used_today,
-        dailyCap: row.daily_cap,
-        lockedUntil: row.locked_until,
-        serverNow: row.server_now,
-      },
-      error: null,
-    };
-  } catch (err) {
-    return { data: null, error: mapError(err) };
-  }
-}
-
-
-/**
- * Sends a prompt to the i-chat Supabase Edge Function (backed by Gemini).
+ * Sends a prompt to the ai-chat Supabase Edge Function (backed by Gemini).
  */
 export async function sendAiPrompt(
   prompt: string,
@@ -1442,7 +1390,7 @@ export async function sendAiPrompt(
       if (ctx && typeof ctx.json === 'function') {
         try {
           const body = (await ctx.json()) as {
-            error?: { code?: ApiError['code']; message?: string; details?: unknown };
+            error?: { code?: ApiError['code']; message?: string };
           };
           if (body?.error?.code) {
             return {
@@ -1450,7 +1398,6 @@ export async function sendAiPrompt(
               error: {
                 code: body.error.code,
                 message: body.error.message || 'AI request failed.',
-                details: body.error.details,
               },
             };
           }
@@ -1500,7 +1447,7 @@ export async function streamAiPrompt({
   prompt: string;
   history?: AiChatTurn[];
   onChunk: (text: string) => void;
-  onDone: (quota: AiQuota | null) => void;
+  onDone: () => void;
   onError: (err: ApiError) => void;
   signal?: AbortSignal;
   client?: SupabaseClient<Database>;
@@ -1563,6 +1510,13 @@ export async function streamAiPrompt({
     let currentEvent = 'message';
 
     let done = false;
+    let settled = false;
+    const finish = () => {
+      if (!settled) {
+        settled = true;
+        onDone();
+      }
+    };
     while (!done) {
       const result = await reader.read();
       done = result.done;
@@ -1592,8 +1546,9 @@ export async function streamAiPrompt({
           try {
             const data = JSON.parse(jsonStr);
             if (currentEvent === 'done') {
-              onDone(data.quota || null);
+              finish();
             } else if (currentEvent === 'error') {
+              settled = true;
               onError({
                 code: data.code || 'OPERATION_FAILED',
                 message: data.message || 'Stream was interrupted.',
@@ -1623,6 +1578,9 @@ export async function streamAiPrompt({
         }
       }
     }
+
+    // Always settle the UI, even if an upstream proxy strips the done event.
+    finish();
   } catch (err: unknown) {
     if (signal?.aborted) {
       return;
@@ -1639,10 +1597,10 @@ export async function getMyInviteCode(
   client: SupabaseClient<Database> = defaultClient
 ): Promise<ApiResult<string>> {
   try {
-    const { data, error } = await client.rpc('get_my_invite_code' as never);
+    const { data, error } = await client.rpc('get_my_invite_code');
     if (error) return { data: null, error: mapError(error) };
     if (!data) return { data: null, error: { code: 'OPERATION_FAILED', message: 'Failed to retrieve invite code.' } };
-    return { data: data as string, error: null };
+    return { data, error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };
   }
@@ -1655,10 +1613,10 @@ export async function regenerateInviteCode(
   client: SupabaseClient<Database> = defaultClient
 ): Promise<ApiResult<string>> {
   try {
-    const { data, error } = await client.rpc('regenerate_invite_code' as never);
+    const { data, error } = await client.rpc('regenerate_invite_code');
     if (error) return { data: null, error: mapError(error) };
     if (!data) return { data: null, error: { code: 'OPERATION_FAILED', message: 'Failed to regenerate invite code.' } };
-    return { data: data as string, error: null };
+    return { data, error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };
   }
@@ -1674,15 +1632,11 @@ export async function resolveInvite(
 ): Promise<ApiResult<ResolvedInvite>> {
   try {
     const cleanCode = code.trim();
-    const { data, error } = await client.rpc('resolve_invite' as never, {
+    const { data, error } = await client.rpc('resolve_invite', {
       p_code: cleanCode,
-    } as never);
+    });
     if (error) return { data: null, error: mapError(error) };
-    const rows = data as unknown as Array<{
-      username: string;
-      display_name: string;
-      avatar_seed?: string | null;
-    }>;
+    const rows = data ?? [];
     if (!rows || rows.length === 0 || !rows[0].username) {
       return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
     }
@@ -1709,14 +1663,14 @@ export async function redeemInvite(
 ): Promise<ApiResult<string>> {
   try {
     const cleanCode = code.trim();
-    const { data, error } = await client.rpc('redeem_invite' as never, {
+    const { data, error } = await client.rpc('redeem_invite', {
       p_code: cleanCode,
-    } as never);
+    });
     if (error) return { data: null, error: mapError(error) };
     if (!data) {
       return { data: null, error: { code: 'INVALID_INVITE', message: 'This invite link is invalid or has expired.' } };
     }
-    return { data: data as string, error: null };
+    return { data, error: null };
   } catch (err) {
     return { data: null, error: mapError(err) };
   }

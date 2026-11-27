@@ -19,7 +19,7 @@ import { IdenticonAvatar } from '@/features/chat/components/IdenticonAvatar';
 import { getHumanErrorMessage } from '@/features/chat/components/ErrorMessage';
 import { APP_NAME } from '@/lib/constants';
 import { AiChat } from '@/components/layout/AiChat';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useIsDesktop } from '@/hooks/useMediaQuery';
 
 type Filter = 'All' | 'Unread' | 'Groups';
 const FILTERS: Filter[] = ['All', 'Unread', 'Groups'];
@@ -58,11 +58,11 @@ export function Sidebar({
   const location = useLocation();
 
   /**
-   * md breakpoint = 768px.
-   * On md+ we use the desktop layout: AI opens in the right pane (/ai route).
-   * Below md we use the mobile layout: AI opens as a slide-up sheet.
+   * The desktop layout starts at the shared `lg` breakpoint (1024px).
+   * On lg+ AI opens in the right pane (/ai route); below it, AI opens as a
+   * slide-up sheet. ChatLayout uses the same breakpoint for its two-column view.
    */
-  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const isDesktop = useIsDesktop();
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -163,10 +163,16 @@ export function Sidebar({
 
   return (
     <>
-      <header className="flex items-center justify-between px-4 pb-2 pt-4">
-        <div className="flex items-center gap-2 min-w-0 shrink-0">
-          <h1 className="text-xl font-bold tracking-tight text-thread-text dark:text-thread-text flex items-center gap-2 shrink-0">
-            <span className="text-thread-accent">{APP_NAME}</span>
+      <header className="flex items-center justify-between px-4 pb-3 pt-4">
+        <div className="flex items-center gap-2.5 min-w-0 shrink-0">
+          <span
+            aria-hidden="true"
+            className="thread-gradient-bg thread-animate-pop flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-sm font-bold shadow-thread-glow"
+          >
+            {APP_NAME.charAt(0)}
+          </span>
+          <h1 className="flex shrink-0 items-center gap-2 text-xl font-bold tracking-tight text-thread-text">
+            <span className="thread-gradient-text">{APP_NAME}</span>
           </h1>
         </div>
         <div className="flex items-center gap-2">
@@ -175,7 +181,7 @@ export function Sidebar({
             <button
               type="button"
               onClick={() => setIsMenuOpen((p) => !p)}
-              className="p-2.5 rounded-xl text-thread-muted dark:text-thread-muted hover:bg-thread-soft dark:hover:bg-thread-soft transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-thread-accent"
+              className="thread-focus-ring flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-2.5 text-thread-muted transition-all hover:scale-105 hover:bg-thread-soft hover:text-thread-accent-2 focus:ring-2 focus:ring-thread-accent"
               aria-label="Menu"
               aria-expanded={isMenuOpen}
               aria-haspopup="menu"
@@ -185,7 +191,7 @@ export function Sidebar({
 
             {isMenuOpen && (
               <div
-                className="absolute right-0 top-full mt-1 w-48 rounded-2xl bg-white dark:bg-slate-900 border border-thread-border dark:border-thread-border shadow-lg py-1.5 z-50"
+                className="thread-glass thread-animate-pop absolute right-0 top-full z-50 mt-1 w-48 rounded-2xl py-1.5"
                 role="menu"
                 aria-label="Sidebar menu"
               >
@@ -254,7 +260,7 @@ export function Sidebar({
             type="button"
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="p-2.5 rounded-xl text-thread-muted dark:text-thread-muted hover:bg-thread-soft dark:hover:bg-thread-soft transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-thread-accent"
+            className="thread-focus-ring flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl p-2.5 text-thread-muted transition-all hover:scale-105 hover:bg-thread-soft hover:text-thread-accent-2 focus:ring-2 focus:ring-thread-accent disabled:opacity-60"
             aria-label="Refresh conversations"
           >
             <RefreshCw
@@ -266,7 +272,7 @@ export function Sidebar({
 
       <div className="px-3 py-2">
         <label
-          className="flex items-center gap-3 rounded-full bg-thread-bg px-4 py-2 focus-within:ring-2 focus-within:ring-thread-accent"
+          className="flex items-center gap-3 rounded-full border border-thread-border bg-thread-surface-2 px-4 py-1.5 transition-colors focus-within:border-thread-accent-2 focus-within:bg-thread-surface focus-within:ring-2 focus-within:ring-thread-accent-tint"
           onFocus={() => setIsSearchFocused(true)}
           onBlur={() => setIsSearchFocused(false)}
         >
@@ -276,21 +282,21 @@ export function Sidebar({
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
             placeholder="Search chats and messages"
-            className="w-full bg-transparent text-sm outline-none placeholder:text-thread-muted min-h-[44px]"
+            aria-label="Search chats and messages"
+            className="min-h-[44px] w-full bg-transparent text-sm text-thread-text outline-none placeholder:text-thread-muted"
           />
         </label>
       </div>
 
-      <div className="flex gap-2 px-3 pb-2">
+      <div className="flex gap-2 px-3 pb-3" role="group" aria-label="Conversation filters">
         {FILTERS.map((f) => (
           <button
             key={f}
             type="button"
             onClick={() => setFilter(f)}
-            className={`rounded-full border px-3 py-1 text-sm ${
-              filter === f
-                ? 'border-thread-accent bg-thread-soft text-thread-accent'
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+            aria-pressed={filter === f}
+            className={`thread-chip thread-focus-ring min-h-[36px] px-3.5 py-1 text-xs font-medium ${
+              filter === f ? 'thread-chip--active' : ''
             }`}
           >
             {f}
@@ -299,14 +305,15 @@ export function Sidebar({
       </div>
 
       <ul
-        className="flex-1 overflow-y-auto"
+        className="thread-scrollbar flex-1 space-y-1.5 overflow-y-auto px-2"
         role="list"
         aria-label="Direct conversations"
         style={{ paddingBottom: 96 }}
       >
         {visible.length === 0 && (
-          <li className="px-4 py-8 text-center text-sm text-thread-muted">
-            No chats found
+          <li className="thread-animate-in px-4 py-10 text-center">
+            <p className="text-sm font-medium text-thread-text">No chats found</p>
+            <p className="mt-1 text-xs text-thread-muted">Try another search or filter.</p>
           </li>
         )}
         {visible.map((conv) => {
@@ -327,12 +334,17 @@ export function Sidebar({
                   onSelect(conv.conversationId);
                   markRead(conv.conversationId).catch(() => {});
                 }}
-                className={`w-full p-4 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 border border-slate-200 dark:border-slate-800 transition-colors flex items-center gap-3 text-left min-h-[44px] focus:outline-none focus:ring-2 focus:ring-thread-accent ${
-                  activeId === conv.conversationId
-                    ? 'bg-thread-soft border-thread-accent'
-                    : ''
+                aria-current={activeId === conv.conversationId ? 'true' : undefined}
+                className={`thread-card thread-focus-ring thread-animate-in relative flex w-full items-center gap-3 overflow-hidden p-3.5 text-left transition-all hover:-translate-y-px hover:border-thread-accent-2 min-h-[44px] ${
+                  activeId === conv.conversationId ? 'thread-conversation-active' : ''
                 }`}
               >
+                {activeId === conv.conversationId && (
+                  <span
+                    aria-hidden="true"
+                    className="thread-gradient-bg absolute inset-y-2 left-0 w-1 rounded-r-full"
+                  />
+                )}
                 {conv.kind === 'group' ? (
                   <IdenticonAvatar
                     seed={conv.conversationId}
@@ -360,18 +372,22 @@ export function Sidebar({
                       )}
                     </span>
                     {lastMessage?.createdAt && (
-                      <span className="text-xs text-thread-muted dark:text-thread-muted shrink-0">
+                      <span className="shrink-0 text-[11px] font-medium text-thread-muted">
                         {formatMessageTime(lastMessage.createdAt)}
                       </span>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 mt-1">
-                    <p className="text-xs text-thread-muted dark:text-thread-muted truncate">
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <p className="truncate text-xs leading-snug text-thread-muted">
                       {lastMessage?.body ? lastMessage.body : 'No messages yet'}
                     </p>
                     {unreadCount > 0 && (
-                      <span className="px-2 py-0.5 text-xs font-bold text-white bg-thread-accent rounded-full shrink-0">
+                      <span
+                        className={`thread-gradient-bg thread-animate-pop inline-flex min-w-[22px] shrink-0 items-center justify-center rounded-full px-2 py-0.5 font-bold leading-tight shadow-thread-glow ${
+                          unreadCount >= 10 ? 'text-[10px]' : 'text-xs'
+                        }`}
+                      >
                         {badgeText}
                       </span>
                     )}
@@ -385,7 +401,7 @@ export function Sidebar({
 
       {errorCode && (
         <div
-          className="my-4 flex items-center justify-between p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 text-xs"
+          className="thread-animate-in mx-2 my-3 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
           role="alert"
         >
           <div className="flex items-center gap-2">
@@ -408,7 +424,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => navigate('/chats/new')}
-            className="fixed z-40 left-16 bottom-[calc(16px+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-thread-accent text-white shadow-lg flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-thread-accent focus:ring-offset-2 dark:focus:ring-offset-slate-900 hover:bg-indigo-700 prefers-reduced-motion:transition-none"
+            className="thread-fab thread-focus-ring fixed bottom-[calc(16px+env(safe-area-inset-bottom))] left-16 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-thread-accent text-white focus:ring-2 focus:ring-thread-accent focus:ring-offset-2 dark:focus:ring-offset-thread-bg"
             aria-label="New chat"
             title="New chat"
           >
@@ -416,7 +432,7 @@ export function Sidebar({
           </button>
           <Link
             to="/t-chat"
-            className="fixed z-40 left-1/2 bottom-[calc(20px+env(safe-area-inset-bottom))] -translate-x-1/2 rounded-full bg-white px-4 py-3 text-sm font-semibold text-thread-accent shadow-lg ring-1 ring-thread-border transition-colors hover:bg-thread-soft focus:outline-none focus:ring-2 focus:ring-thread-accent dark:bg-slate-900 dark:text-thread-accent dark:ring-slate-700"
+            className="thread-chip thread-focus-ring fixed bottom-[calc(20px+env(safe-area-inset-bottom))] left-1/2 z-40 -translate-x-1/2 rounded-full px-5 py-2.5 text-sm font-semibold text-thread-accent-2 shadow-thread hover:-translate-y-0.5 hover:text-thread-accent-2 focus:ring-2 focus:ring-thread-accent"
             aria-label="T-Chat"
             title="T-Chat"
           >
@@ -425,7 +441,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={handleAiClick}
-            className="fixed z-40 right-16 bottom-[calc(16px+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-thread-accent text-white shadow-lg flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-thread-accent focus:ring-offset-2 dark:focus:ring-offset-slate-900 hover:bg-indigo-700 prefers-reduced-motion:transition-none"
+            className="thread-fab thread-focus-ring fixed bottom-[calc(16px+env(safe-area-inset-bottom))] right-16 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-thread-accent text-white focus:ring-2 focus:ring-thread-accent focus:ring-offset-2 dark:focus:ring-offset-thread-bg"
             aria-label="Ask AI"
             title="Ask AI"
           >
@@ -441,7 +457,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => navigate('/chats/new')}
-            className="w-14 h-14 rounded-full bg-thread-accent text-white shadow-lg flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-thread-accent focus:ring-offset-2 dark:focus:ring-offset-slate-900 hover:bg-indigo-700 prefers-reduced-motion:transition-none"
+            className="thread-fab thread-focus-ring flex h-14 w-14 items-center justify-center rounded-full bg-thread-accent text-white focus:ring-2 focus:ring-thread-accent focus:ring-offset-2 dark:focus:ring-offset-thread-bg"
             aria-label="New chat"
             title="New chat"
           >
@@ -449,7 +465,7 @@ export function Sidebar({
           </button>
           <Link
             to="/t-chat"
-            className="inline-flex min-h-11 items-center rounded-full border border-thread-border bg-white px-5 text-sm font-semibold text-thread-accent shadow-sm transition-colors hover:bg-thread-soft focus:outline-none focus:ring-2 focus:ring-thread-accent dark:border-slate-700 dark:bg-slate-900 dark:text-thread-accent"
+            className="thread-chip thread-focus-ring inline-flex min-h-11 items-center rounded-full px-5 text-sm font-semibold text-thread-accent-2 shadow-thread focus:ring-2 focus:ring-thread-accent"
             aria-label="T-Chat"
             title="T-Chat"
           >
@@ -459,7 +475,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={handleAiClick}
-            className="w-14 h-14 rounded-full bg-thread-accent text-white shadow-lg flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-thread-accent focus:ring-offset-2 dark:focus:ring-offset-slate-900 hover:bg-indigo-700 prefers-reduced-motion:transition-none"
+            className="thread-fab thread-focus-ring flex h-14 w-14 items-center justify-center rounded-full bg-thread-accent text-white focus:ring-2 focus:ring-thread-accent focus:ring-offset-2 dark:focus:ring-offset-thread-bg"
             aria-label="Ask AI"
             title="Ask AI"
           >

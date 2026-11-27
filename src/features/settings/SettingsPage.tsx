@@ -1,4 +1,3 @@
-// TODO: listBlockedUsers and updateDisplayName need contract RPCs — see NEEDS_API.md
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {

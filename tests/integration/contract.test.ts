@@ -227,8 +227,11 @@ describe('Real Stack Integration Tests (Real JWTs)', { timeout: 40000 }, () => {
       clientE
     );
 
-    // Wait until Realtime channel is confirmed SUBSCRIBED
+    // Wait until Realtime channel is confirmed SUBSCRIBED, then give Postgres
+    // Changes a brief moment to attach its server-side listener. Without this
+    // settle delay, a fast send can race channel registration and be missed.
     await subscribedPromise;
+    await new Promise((r) => setTimeout(r, 250));
 
     // User D sends a message to stranger conversation DC (User E should NOT receive it)
     await sendMessage(

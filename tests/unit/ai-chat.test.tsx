@@ -22,20 +22,10 @@ describe('AiChat UI', () => {
 });
 
 describe('sendAiPrompt (Supabase Edge Function client)', () => {
-  it('invokes the ai-chat edge function and returns reply + quota', async () => {
+  it('invokes the ai-chat edge function and returns the reply', async () => {
     const mockInvoke = vi.fn().mockResolvedValue({
       data: {
-        data: {
-          reply: 'Hello from Gemini!',
-          quota: {
-            remainingInBatch: 4,
-            batchSize: 5,
-            usedToday: 1,
-            dailyCap: 10,
-            lockedUntil: null,
-            serverNow: '2026-11-25T10:00:00Z',
-          },
-        },
+        data: { reply: 'Hello from Gemini!' },
       },
       error: null,
     });
@@ -50,18 +40,18 @@ describe('sendAiPrompt (Supabase Edge Function client)', () => {
     });
     expect(res.error).toBeNull();
     expect(res.data?.reply).toBe('Hello from Gemini!');
-    expect(res.data?.quota?.remainingInBatch).toBe(4);
   });
 
-  it('maps edge function HTTP error payload (e.g. RATE_LIMITED)', async () => {
+  it('maps edge function HTTP error payload without leaking raw details', async () => {
     const mockInvoke = vi.fn().mockResolvedValue({
       data: null,
       error: {
         context: {
           json: async () => ({
             error: {
-              code: 'RATE_LIMITED',
-              message: 'AI prompt limit reached.',
+              code: 'OPERATION_FAILED',
+              message: 'AI service is unavailable.',
+              details: { internal: 'should-not-leak' },
             },
           }),
         },
@@ -74,8 +64,9 @@ describe('sendAiPrompt (Supabase Edge Function client)', () => {
 
     const res = await sendAiPrompt('Hi', [], mockClient);
     expect(res.data).toBeNull();
-    expect(res.error?.code).toBe('RATE_LIMITED');
-    expect(res.error?.message).toBe('AI prompt limit reached.');
+    expect(res.error?.code).toBe('OPERATION_FAILED');
+    expect(res.error?.message).toBe('AI service is unavailable.');
+    expect(res.error?.details).toBeUndefined();
   });
 });
 
