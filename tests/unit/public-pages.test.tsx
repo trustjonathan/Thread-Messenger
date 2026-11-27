@@ -22,6 +22,15 @@ describe('Public website', () => {
     expect((html.match(/<h1\b/g) ?? []).length).toBe(1);
   });
 
+  it('promotes Thread Chat with a direct Android download and more information', () => {
+    const html = render(<LandingPage />);
+    expect(html).toContain('Meet Thread Chat');
+    expect(html).toContain(
+      'href="https://github.com/trustjonathan/Thread-Messenger/releases/latest/download/app-universal-debug.apk"'
+    );
+    expect(html).toContain('href="/t-chat"');
+  });
+
   it.each([
     ['/terms', <TermsPage />],
     ['/privacy', <PrivacyPage />],

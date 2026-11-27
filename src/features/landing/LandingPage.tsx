@@ -155,6 +155,37 @@ export default function LandingPage() {
           </figure>
         </section>
 
+        <section data-reveal className="border-y border-indigo-100 bg-indigo-50 px-4 py-12 dark:border-indigo-950 dark:bg-indigo-950/30 sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
+            <div className="max-w-2xl">
+              <p className="text-sm font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                For Android
+              </p>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
+                Meet Thread Chat
+              </h2>
+              <p className="mt-2 leading-7 text-slate-600 dark:text-slate-300">
+                Keep conversations going with people nearby, even when internet access is unavailable.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:items-start">
+              <a
+                href="https://github.com/trustjonathan/Thread-Messenger/releases/latest/download/app-universal-debug.apk"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-950"
+              >
+                <Download className="h-5 w-5" aria-hidden="true" />
+                Download Thread Chat
+              </a>
+              <Link
+                to="/t-chat"
+                className="text-sm font-semibold text-indigo-700 underline underline-offset-2 hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-200"
+              >
+                Learn more
+              </Link>
+            </div>
+          </div>
+        </section>
+
         <section data-reveal id="how-it-works" className="border-y border-slate-200 bg-white px-4 py-16 dark:border-slate-800 dark:bg-slate-950 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-6xl">
             <h2 className="text-3xl font-bold tracking-tight text-slate-950 dark:text-white">How it works</h2>

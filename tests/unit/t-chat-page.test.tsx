@@ -4,20 +4,22 @@ import { MemoryRouter } from 'react-router-dom';
 import TChatPage from '@/features/chat/TChatPage';
 
 describe('T-Chat page', () => {
-  it('explains nearby offline messaging and its limits in user-friendly terms', () => {
+  it('describes Thread Chat in clear, user-focused language', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <TChatPage />
       </MemoryRouter>
     );
 
-    expect(html).toContain('Chat nearby, even without internet.');
-    expect(html).toContain('uses Bluetooth');
-    expect(html).toContain('does not provide unlimited, long-distance coverage');
-    expect(html).toContain('Regular chats on the Thread website still need an internet connection.');
+    expect(html).toContain('Thread Chat for Android');
+    expect(html).toContain('Stay in touch, even when you are offline.');
+    expect(html).toContain('Free to download for Android.');
+    expect(html).toContain('It is not a replacement for long-distance messaging.');
+    expect(html).not.toContain('Bluetooth');
+    expect(html).not.toContain('T-Chat');
   });
 
-  it('links directly to the requested Android APK and release page', () => {
+  it('links to the latest Android app download', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <TChatPage />
@@ -25,10 +27,7 @@ describe('T-Chat page', () => {
     );
 
     expect(html).toContain(
-      'href="https://github.com/trustjonathan/Thread-Messenger/releases/download/v2.2.0/app-universal-debug.apk"'
-    );
-    expect(html).toContain(
-      'href="https://github.com/trustjonathan/Thread-Messenger/releases/tag/v2.2.0"'
+      'href="https://github.com/trustjonathan/Thread-Messenger/releases/latest/download/app-universal-debug.apk"'
     );
   });
 });
