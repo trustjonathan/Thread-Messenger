@@ -14,6 +14,7 @@ import type { CurrentUser } from '@/types/api';
 const SignInPage = lazy(() => import('./features/auth/SignInPage'));
 const ChooseUsernamePage = lazy(() => import('./features/auth/ChooseUsernamePage'));
 const NewGroupPage = lazy(() => import('./features/chat/NewGroupPage'));
+const TChatPage = lazy(() => import('./features/chat/TChatPage'));
 const ChatLayout = lazy(() => import('./components/layout/ChatLayout'));
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage'));
 const AvatarPage = lazy(() => import('./features/settings/AvatarPage'));
@@ -280,6 +281,14 @@ export function App() {
           element={
             <ProtectedRoute user={user} loading={loading}>
               <NewGroupPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/t-chat"
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <TChatPage />
             </ProtectedRoute>
           }
         />
